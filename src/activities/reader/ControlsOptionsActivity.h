@@ -43,7 +43,7 @@ class ControlsOptionsActivity final : public Activity {
   void openSubmenu(SettingAction action);
   void closeSubmenu();
   void moveSelection(bool forward);
-  bool currentSettingUsesOptionMenu(const SettingInfo& setting) const;
+  static bool currentSettingUsesOptionMenu(const SettingInfo& setting);
   void openEnumOptionPicker(const SettingInfo& setting);
   void toggleCurrentSetting();
   static void optionsScreen(UiApp::ScreenType& screen, void* user);

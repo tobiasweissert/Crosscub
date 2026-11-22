@@ -382,7 +382,8 @@ void DictionarySelectActivity::render(RenderLock&&) {
     return;
   }
   renderer.clearScreen();
-  const auto& metrics = UITheme::getInstance().getMetrics();
+  // Refresh cached metrics if the touch capability has changed.
+  UITheme::getInstance().getMetrics();
   const Rect header = TouchHeaderBackButton::headerRect(renderer, mappedInput);
   if (mappedInput.hasTouchHardware()) {
     TouchHeaderBackButton::draw(renderer, uiTarget, header, tr(STR_DICTIONARY), false);

@@ -983,13 +983,14 @@ void EpubReaderTouchMenuActivity::buildDrawerKeypad(UiApp::ScreenType& screen, c
   const int16_t cellW = static_cast<int16_t>((gridArea.width - gridProps.gap * 2) / 3);
   const int16_t tightestCell = std::min<int16_t>(cellH, cellW);
   gridProps.minTouchSize = std::min<int16_t>(theme.minTouchSize, std::max<int16_t>(1, tightestCell));
-  gridProps.radius = 3;
 #if defined(FREEINK_DEVICE_STICKY) && FREEINK_DEVICE_STICKY
   gridProps.radius = fui::KeyboardProps{}.keyRadius;
   uiTarget.setFont(fui::GfxRendererTarget::FONT_BODY, UI_12_FONT_ID);
   gridProps.labelText = fui::TextStyle{};
   gridProps.labelText.font = fui::GfxRendererTarget::FONT_BODY;
   gridProps.labelText.align = fui::TextAlign::Center;
+#else
+  gridProps.radius = 3;
 #endif
   fui::keyGrid(screen.frame(), gridArea, gridProps);
 #if defined(FREEINK_DEVICE_STICKY) && FREEINK_DEVICE_STICKY
@@ -1481,12 +1482,8 @@ void EpubReaderTouchMenuActivity::showEnumOptions(const RowId row) {
         raw.push_back(0);
       }
       if (hasDictionaryFontOverride && dictionaryFontFamilyName[0] != '\0') {
-        for (size_t i = 1; i < labels.size(); ++i) {
-          if (labels[i] == dictionaryFontFamilyName) {
-            currentRaw = raw[i];
-            break;
-          }
-        }
+        const auto match = std::find(std::next(labels.begin()), labels.end(), dictionaryFontFamilyName);
+        if (match != labels.end()) currentRaw = raw[std::distance(labels.begin(), match)];
       }
       break;
     }
@@ -2184,12 +2181,15 @@ const char* EpubReaderTouchMenuActivity::rowValue(const RowId row, char* buffer,
     }
     case RowId::IndexingMethod:
       return draft.indexingMethod == 0 ? tr(STR_INDEXING_INCREMENTAL) : tr(STR_INDEXING_FULL_SECTION);
-    case RowId::BookDictionary:
+    case RowId::BookDictionary: {
       if (bookDictionaryPath.empty()) return tr(STR_DICT_USE_GLOBAL);
-      for (size_t i = 1; i < dictionaryPaths.size(); ++i) {
-        if (dictionaryPaths[i] == bookDictionaryPath) return dictionaryLabels[i].c_str();
+      if (!dictionaryPaths.empty()) {
+        const auto match = std::find(std::next(dictionaryPaths.begin()), dictionaryPaths.end(), bookDictionaryPath);
+        if (match != dictionaryPaths.end())
+          return dictionaryLabels[std::distance(dictionaryPaths.begin(), match)].c_str();
       }
       return tr(STR_UNAVAILABLE);
+    }
     case RowId::DictionaryFontFamily:
       return hasDictionaryFontOverride ? dictionaryFontFamilyName : tr(STR_DICT_USE_GLOBAL);
     case RowId::DictionaryFontSize:
@@ -2204,7 +2204,7 @@ const char* EpubReaderTouchMenuActivity::rowValue(const RowId row, char* buffer,
   }
 }
 
-bool EpubReaderTouchMenuActivity::rowIsToggle(const RowId row) const {
+bool EpubReaderTouchMenuActivity::rowIsToggle(const RowId row) {
   switch (row) {
     case RowId::TextAa:
     case RowId::Focus:

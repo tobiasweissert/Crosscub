@@ -773,7 +773,8 @@ void ReaderOptionsActivity::render(RenderLock&&) {
 
   renderer.clearScreen();
 
-  const auto& metrics = UITheme::getInstance().getMetrics();
+  // Refresh touch-dependent metrics before computing header geometry.
+  UITheme::getInstance().getMetrics();
   Rect header = TouchHeaderBackButton::headerRect(renderer, mappedInput);
   const Rect safe = UITheme::getInstance().getScreenSafeArea(renderer, !mappedInput.hasTouchHardware(), false);
   header.x = safe.x;

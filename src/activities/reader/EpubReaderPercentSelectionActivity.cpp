@@ -506,9 +506,10 @@ void EpubReaderPercentSelectionActivity::buildKeypadScreen(UiApp::ScreenType& sc
   gridProps.labelText.align = fui::TextAlign::Center;
   gridProps.gap = theme.spaceSm;
   gridProps.minTouchSize = theme.minTouchSize;
-  gridProps.radius = 3;
 #if defined(FREEINK_DEVICE_STICKY) && FREEINK_DEVICE_STICKY
   gridProps.radius = fui::KeyboardProps{}.keyRadius;
+#else
+  gridProps.radius = 3;
 #endif
   // Non-touch shows which key directional nav is on; touch has no such focus concept.
   gridProps.selectedIndex =

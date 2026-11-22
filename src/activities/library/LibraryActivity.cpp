@@ -36,6 +36,8 @@
 namespace fui = freeink::ui;
 
 namespace {
+bool libraryMetadataEnabled() { return SETTINGS.libraryUseMetadata != 0; }
+
 // Local adapter: the selected CrossPoint SDK has no Ink DateFormatting.h.
 // Consume the persisted owner date ordinals rather than inventing a new schema.
 bool formatDateParts(char* out, size_t size, unsigned year, unsigned month, unsigned day, uint8_t format,
@@ -208,7 +210,7 @@ void LibraryActivity::refreshIndexIfNeeded(const bool showScanning) {
   // Reuse the index across ordinary visits; still reconcile after cold boots, after
   // file changes, and when the format or metadata setting no longer matches.
   if (library::libraryIndexNeedsRefresh() || (!index.isOpen() && !index.open(library::libraryIndexPath())) ||
-      index.header().metadataEnabled != static_cast<uint8_t>(SETTINGS.libraryUseMetadata != 0)) {
+      index.header().metadataEnabled != static_cast<uint8_t>(libraryMetadataEnabled())) {
     rebuildIndex(showScanning);
     return;
   }
@@ -235,7 +237,7 @@ bool LibraryActivity::rebuildIndex(const bool showScanning) {
   scanCancelledThisVisit = false;
   scanBackHeldAtStart = mappedInput.isPressed(MappedInputManager::Button::Back);
   scanInProgress = true;
-  scanFailed = !library::buildLibraryIndex("/", stats, SETTINGS.libraryUseMetadata != 0, &callbacks);
+  scanFailed = !library::buildLibraryIndex("/", stats, libraryMetadataEnabled(), &callbacks);
   scanInProgress = false;
   scanFailureText = stats.failure == library::BuildFailure::Cancelled      ? "Scan cancelled"
                     : stats.failure == library::BuildFailure::TooManyBooks ? "Too many books (maximum 32767)"
@@ -848,10 +850,10 @@ void LibraryActivity::refreshLibrary() {
 }
 
 void LibraryActivity::openSettings() {
-  const bool useMetadata = SETTINGS.libraryUseMetadata != 0;
+  const bool useMetadata = libraryMetadataEnabled();
   openDialog(makeUniqueNoThrow<LibrarySettingsActivity>(renderer, mappedInput),
              [this, useMetadata](const ActivityResult&) {
-               if ((SETTINGS.libraryUseMetadata != 0) != useMetadata) {
+               if (libraryMetadataEnabled() != useMetadata) {
                  rebuildIndex(true);
                } else {
                  applyFilter();

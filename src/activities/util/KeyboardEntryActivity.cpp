@@ -472,7 +472,7 @@ KeyboardEntryActivity::InputFieldTouchTarget KeyboardEntryActivity::inputFieldTo
   const auto& metrics = UITheme::getInstance().getMetrics();
 
   const int lineHeight = renderer.getLineHeight(UI_12_FONT_ID);
-  const int inputStartY = this->inputStartY();
+  const int fieldTop = this->inputStartY();
 
   int availableWidth = pageWidth;
   // Clear the side-button hint gutters, which only render on edge-button boards without touch.
@@ -491,7 +491,7 @@ KeyboardEntryActivity::InputFieldTouchTarget KeyboardEntryActivity::inputFieldTo
   std::string displayText = displayTextForCurrentState();
 
   int lineStartIdx = inputViewportStart(displayText, maxLineWidth);
-  int lineY = inputStartY;
+  int lineY = fieldTop;
   int lastLineStartIdx = 0;
   int lastLineEndIdx = static_cast<int>(displayText.length());
   int lastLineStartX = effectiveMargin;
@@ -554,7 +554,7 @@ KeyboardEntryActivity::InputFieldTouchTarget KeyboardEntryActivity::inputFieldTo
   }
 
   const int underlineBottom = lineY + lineHeight + metrics.verticalSpacing + 8;
-  if (y >= inputStartY - metrics.verticalSpacing && y < underlineBottom && x >= effectiveMargin &&
+  if (y >= fieldTop - metrics.verticalSpacing && y < underlineBottom && x >= effectiveMargin &&
       x < effectiveMargin + maxLineWidth + toggleReserve) {
     const bool isRtl = rangeIsRtl(displayText, lastLineStartIdx, lastLineEndIdx);
     const bool insideText = x < lastLineStartX + lastLineWidth;
@@ -845,7 +845,7 @@ void KeyboardEntryActivity::paint() {
   }
 
   const int lineHeight = renderer.getLineHeight(UI_12_FONT_ID);
-  const int inputStartY = this->inputStartY();
+  const int fieldTop = this->inputStartY();
   int inputHeight = 0;
 
   std::string displayText = displayTextForCurrentState();
@@ -886,7 +886,7 @@ void KeyboardEntryActivity::paint() {
   int lineStartIdx = inputViewportStart(displayText, maxLineWidth);
   int textWidth = 0;
   int cursorPixelX = effectiveMargin;
-  int cursorLineY = inputStartY;
+  int cursorLineY = fieldTop;
   bool cursorDrawn = false;
 
   while (true) {
@@ -921,7 +921,7 @@ void KeyboardEntryActivity::paint() {
         } else {
           cursorPixelX = lineStartX + beforeWidth + kernOffset;
         }
-        cursorLineY = inputStartY + inputHeight;
+        cursorLineY = fieldTop + inputHeight;
         cursorDrawn = true;
         isCursorLine = true;
       }
@@ -931,23 +931,23 @@ void KeyboardEntryActivity::paint() {
         // displayText uses '*' for all chars; actual char may be wider than '*'.
         // Part 1: chars before cursor position
         const std::string part1 = displayText.substr(lineStartIdx, cursorPos - lineStartIdx);
-        renderer.drawText(UI_12_FONT_ID, lineStartX, inputStartY + inputHeight, part1.c_str());
+        renderer.drawText(UI_12_FONT_ID, lineStartX, fieldTop + inputHeight, part1.c_str());
         // Part 2: skip cursor slot (block + actual char drawn later)
         // Part 3: chars after cursor position (skip char under cursor), starting at cursorPixelX + cursorCharWidth
         const int afterStart = static_cast<int>(cursorPos + cursorCharBytes);
         const int afterEnd = lineEndIdx;
         if (afterStart < afterEnd) {
           const std::string part3 = displayText.substr(afterStart, afterEnd - afterStart);
-          renderer.drawText(UI_12_FONT_ID, cursorPixelX + cursorCharWidth, inputStartY + inputHeight, part3.c_str());
+          renderer.drawText(UI_12_FONT_ID, cursorPixelX + cursorCharWidth, fieldTop + inputHeight, part3.c_str());
         }
       } else {
-        renderer.drawText(UI_12_FONT_ID, lineStartX, inputStartY + inputHeight, lineText.c_str());
+        renderer.drawText(UI_12_FONT_ID, lineStartX, fieldTop + inputHeight, lineText.c_str());
       }
       if (lineEndIdx == static_cast<int>(displayText.length())) {
         break;
       }
 #if defined(FREEINK_DEVICE_STICKY) && FREEINK_DEVICE_STICKY
-      if (inputStartY + inputHeight + 2 * lineHeight + metrics.verticalSpacing + 12 > keyboardRect().y) break;
+      if (fieldTop + inputHeight + 2 * lineHeight + metrics.verticalSpacing + 12 > keyboardRect().y) break;
 #endif
 
       inputHeight += lineHeight;
@@ -957,7 +957,7 @@ void KeyboardEntryActivity::paint() {
 
   const int fieldWidth = (inputHeight > 0) ? maxLineWidth : textWidth;
   const int lineMargin = effectiveMargin;
-  GUI.drawTextField(renderer, Rect{0, inputStartY, pageWidth, inputHeight}, fieldWidth, cursorMode, lineMargin,
+  GUI.drawTextField(renderer, Rect{0, fieldTop, pageWidth, inputHeight}, fieldWidth, cursorMode, lineMargin,
                     pageWidth - 2 * lineMargin);
 
   if (cursorMode && !togglePos && cursorPos <= displayText.length()) {
@@ -982,7 +982,7 @@ void KeyboardEntryActivity::paint() {
     const char* toggleLabel = passwordVisible ? "[***]" : "[abc]";
     const int toggleWidth = renderer.getTextWidth(UI_12_FONT_ID, toggleLabel);
     const int toggleX = pageWidth - effectiveMargin - toggleWidth;
-    const int toggleY = inputStartY + inputHeight;
+    const int toggleY = fieldTop + inputHeight;
     const bool toggleSelected = cursorMode && togglePos;
 
     if (toggleSelected) {
@@ -995,7 +995,7 @@ void KeyboardEntryActivity::paint() {
 
   if (!mappedInput.hasTouchHardware() && hintVisible && !text.empty()) {
     const int hintLh = renderer.getLineHeight(SMALL_FONT_ID);
-    const int underlineY = inputStartY + inputHeight + lineHeight + metrics.verticalSpacing;
+    const int underlineY = fieldTop + inputHeight + lineHeight + metrics.verticalSpacing;
     const int hintY = underlineY + 4;
     if (cursorMode) {
       int hintLineY = hintY;
@@ -1021,7 +1021,7 @@ void KeyboardEntryActivity::paint() {
   const fui::Rect kbRect = keyboardRect();
 
   const int tipsLh = renderer.getLineHeight(SMALL_FONT_ID);
-  const int underlineBottom = inputStartY + inputHeight + lineHeight + metrics.verticalSpacing + 4;
+  const int underlineBottom = fieldTop + inputHeight + lineHeight + metrics.verticalSpacing + 4;
   auto drawTip = [&](const char* tip, int y) { renderer.drawCenteredText(SMALL_FONT_ID, y, tip, true); };
 
   int tipCount = 0;

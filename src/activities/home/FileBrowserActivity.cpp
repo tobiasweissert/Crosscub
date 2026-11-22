@@ -689,7 +689,7 @@ void FileBrowserActivity::unpinSleepFavorite() {
   requestUpdate();
 }
 
-bool FileBrowserActivity::isPinnedSleepFavorite(const std::string& fullPath) const {
+bool FileBrowserActivity::isPinnedSleepFavorite(const std::string& fullPath) {
   return APP_STATE.favoriteSleepImagePath == fullPath;
 }
 
@@ -729,7 +729,7 @@ void FileBrowserActivity::clearPreferredSleepFolder() {
   requestUpdate();
 }
 
-bool FileBrowserActivity::isPreferredSleepFolder(const std::string& fullPath) const {
+bool FileBrowserActivity::isPreferredSleepFolder(const std::string& fullPath) {
   return APP_STATE.preferredSleepFolderPath == normalizeDirectoryPath(fullPath);
 }
 
@@ -757,7 +757,7 @@ void FileBrowserActivity::unpinBootFavorite() {
   requestUpdate();
 }
 
-bool FileBrowserActivity::isPinnedBootFavorite(const std::string& fullPath) const {
+bool FileBrowserActivity::isPinnedBootFavorite(const std::string& fullPath) {
   return APP_STATE.favoriteBootImagePath == fullPath;
 }
 
@@ -1793,7 +1793,6 @@ size_t FileBrowserActivity::findEntry(const std::string& name) {
     return row == SIZE_MAX ? 0 : row;
   }
 
-  for (size_t i = 0; i < files.size(); i++)
-    if (files[i] == name) return i;
-  return 0;
+  const auto it = std::find(files.cbegin(), files.cend(), name);
+  return it == files.cend() ? 0 : static_cast<size_t>(it - files.cbegin());
 }

@@ -29,43 +29,43 @@ int DictationActivity::action() const {
 }
 void DictationActivity::render(RenderLock&&) {
   auto state = action();
-  const char* action = tr(STR_VOICE_RECORD);
+  const char* actionLabel = tr(STR_VOICE_RECORD);
   const char* detail = tr(STR_VOICE_LOCAL);
   if (state == 8) {
-    action = tr(STR_VOICE_UNAVAILABLE);
+    actionLabel = tr(STR_VOICE_UNAVAILABLE);
     detail = tr(STR_VOICE_LANG);
   }
   if (state == 6) {
-    action = tr(STR_VOICE_KEY);
+    actionLabel = tr(STR_VOICE_KEY);
     detail = tr(STR_VOICE_SETUP_HINT);
   }
   if (state == 9) {
-    action = tr(STR_VOICE_UNAVAILABLE);
+    actionLabel = tr(STR_VOICE_UNAVAILABLE);
     detail = tr(STR_VOICE_BUSY);
   }
   if (state == 7) {
-    action = tr(STR_VOICE_WIFI);
+    actionLabel = tr(STR_VOICE_WIFI);
     detail = tr(STR_VOICE_CONNECT);
   }
   if (state == Job::Recording) {
-    action = tr(STR_VOICE_STOP);
+    actionLabel = tr(STR_VOICE_STOP);
     detail = tr(STR_VOICE_MIC);
   }
   if (state == Job::Ready) {
-    action = tr(STR_VOICE_SEND);
+    actionLabel = tr(STR_VOICE_SEND);
     detail = tr(STR_VOICE_COST);
   }
   if (state == Job::Sending) {
-    action = tr(STR_VOICE_SENDING);
+    actionLabel = tr(STR_VOICE_SENDING);
     detail = tr(STR_VOICE_RECALL);
   }
   if (state == Job::Review) {
-    action = tr(STR_VOICE_REVIEW);
+    actionLabel = tr(STR_VOICE_REVIEW);
     detail = tr(STR_VOICE_EDIT);
   }
   if (state == Job::Failed) {
     detail = errorText(job.error.load());
-    action = tr(STR_VOICE_RETRY);
+    actionLabel = tr(STR_VOICE_RETRY);
   }
   renderer.clearScreen();
   renderer.drawCenteredText(UI_12_FONT_ID, 32, tr(STR_NOTES_DICTATION));
@@ -75,7 +75,7 @@ void DictationActivity::render(RenderLock&&) {
     y += renderer.getLineHeight(SMALL_FONT_ID) + 2;
   }
   int h = renderer.getScreenHeight();
-  renderer.drawCenteredText(UI_12_FONT_ID, h - 146, action);
+  renderer.drawCenteredText(UI_12_FONT_ID, h - 146, actionLabel);
   renderer.drawCenteredText(UI_12_FONT_ID, h - 62, tr(STR_CANCEL));
   renderer.displayBuffer();
   // Include orientation/height: a release must still target the painted band.

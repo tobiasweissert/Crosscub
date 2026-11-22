@@ -39,10 +39,9 @@ size_t findSafeExtensionStart(const std::string& name) {
     return std::string::npos;
   }
 
-  for (size_t i = dot + 1; i < name.size(); i++) {
-    if (!std::isalnum(static_cast<unsigned char>(name[i]))) {
-      return std::string::npos;
-    }
+  const auto suffix = name.begin() + dot + 1;
+  if (!std::all_of(suffix, name.end(), [](unsigned char ch) { return std::isalnum(ch); })) {
+    return std::string::npos;
   }
 
   return dot;

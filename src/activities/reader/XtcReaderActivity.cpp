@@ -60,7 +60,7 @@ void drawToast(const GfxRenderer& renderer, const char* msg) {
 enum class XtchRenderPass { Base, Lsb, Msb };
 
 bool streamXtchRenderPass(const Xtc& xtc, const uint32_t pageIndex, const uint16_t pageWidth, const uint16_t pageHeight,
-                          GfxRenderer& renderer, const XtchRenderPass pass) {
+                          const GfxRenderer& renderer, const XtchRenderPass pass) {
   const size_t colBytes = (pageHeight + 7) / 8;
   const size_t planeSize = static_cast<size_t>(pageWidth) * colBytes;
   const xtc::XtcError error =
@@ -510,11 +510,11 @@ void XtcReaderActivity::loop() {
   }
   lastPageTurnTime = now;
 
-  const bool skipPages =
+  const bool isChapterSkip =
       !fromTouch && !fromTilt && !powerPageTurn && heldMs > ReaderUtils::SKIP_HOLD_MS &&
       (fromSideBtn ? SETTINGS.sideButtonLongPress == CrossPointSettings::SIDE_LONG_PRESS::SIDE_LONG_CHAPTER_SKIP
                    : SETTINGS.longPressButtonBehavior == CrossPointSettings::CHAPTER_SKIP);
-  const int skipAmount = skipPages ? 10 : 1;
+  const int skipAmount = isChapterSkip ? 10 : 1;
 
   bool goHome = false;
   bool needsUpdate = false;
@@ -552,7 +552,7 @@ void XtcReaderActivity::loop() {
         currentPage = pageCount;  // Allow showing "End of book"
       }
       if (shouldRecordForwardRead) {
-        recordForwardPageTurn(forwardReadSeconds, !skipPages);
+        recordForwardPageTurn(forwardReadSeconds, !isChapterSkip);
       }
       needsUpdate = true;
     }
@@ -697,8 +697,8 @@ void XtcReaderActivity::recordCurrentPageReadingTime(const char* source) {
 }
 
 void XtcReaderActivity::recordForwardPageTurn(const uint32_t seconds, const bool recordPace) {
-  if (recordPace) notePageTurn(true, true);
   if (recordPace) {
+    notePageTurn(true, true);
     stats.recordForwardPageRead(seconds);
   }
   stats.totalPagesTurned++;
