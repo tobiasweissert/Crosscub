@@ -3522,7 +3522,7 @@ void EpubReaderActivity::openWordSelect(bool framebufferContainsPage, int initia
                                      [](const auto& element) { return element->getTag() == TAG_PageLine; });
         if (it != nextPage->elements.end()) {
           const auto* firstLine = static_cast<const PageLine*>(it->get());
-          if (firstLine->getBlock() && !firstLine->getBlock()->isEmpty()) {
+          if (firstLine->getBlock() && !firstLine->getBlock()->empty()) {
             nextPageFirstWord = firstLine->getBlock()->wordText(0);
           }
         }
