@@ -1363,7 +1363,8 @@ void setup() {
   esp_ota_img_states_t diagnosticImageState = ESP_OTA_IMG_UNDEFINED;
   const esp_err_t diagnosticStateResult =
       diagnosticRunning ? esp_ota_get_state_partition(diagnosticRunning, &diagnosticImageState) : ESP_FAIL;
-  const bool diagnosticPendingVerify = diagnosticStateResult == ESP_OK && diagnosticImageState == ESP_OTA_IMG_PENDING_VERIFY;
+  const bool diagnosticPendingVerify =
+      diagnosticStateResult == ESP_OK && diagnosticImageState == ESP_OTA_IMG_PENDING_VERIFY;
   LOG_INF("PDIA", "boot slot=%lu state=%d stateResult=%d", diagnosticRunning ? diagnosticRunning->address : 0UL,
           static_cast<int>(diagnosticImageState), diagnosticStateResult);
 #endif

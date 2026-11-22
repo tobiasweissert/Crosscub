@@ -54,9 +54,12 @@ bool inDiagnostic() { return diagnosticTask.load() == xTaskGetCurrentTaskHandle(
 // This local qualification image admits read-only Hub indexes, not arbitrary plugins.
 bool diagnosticHubUrl(const std::string& url) {
   return url == "https://raw.githubusercontent.com/crosspoint-reader/crosspoint-plugin-hub/main/catalog.json" ||
-         url == "https://raw.githubusercontent.com/crosspoint-reader/crosspoint-plugin-hub/main/community-catalog.json" ||
+         url ==
+             "https://raw.githubusercontent.com/crosspoint-reader/crosspoint-plugin-hub/main/community-catalog.json" ||
          url == "https://raw.githubusercontent.com/crosspoint-reader/crosspoint-plugin-hub/main/catalog-lists.json" ||
-         url == "https://raw.githubusercontent.com/crosspoint-reader/crosspoint-plugin-hub/main/catalog-lists-capabilities.json";
+         url ==
+             "https://raw.githubusercontent.com/crosspoint-reader/crosspoint-plugin-hub/main/"
+             "catalog-lists-capabilities.json";
 }
 #endif
 int fail(Failure stage) {
@@ -273,10 +276,10 @@ struct Connection {
     size_t count = 0, total = 0;
     for (; cert; cert = cert->next) {
 #if defined(CROSSCUB_PLUGIN_HUB_DIAGNOSTIC)
-      if (inDiagnostic()) LOG_INF("PDIA", "cert=%u from=%04d%02d%02d to=%04d%02d%02d utc=%lld",
-                                  static_cast<unsigned>(count), cert->valid_from.year, cert->valid_from.mon,
-                                  cert->valid_from.day, cert->valid_to.year, cert->valid_to.mon,
-                                  cert->valid_to.day, static_cast<long long>(now));
+      if (inDiagnostic())
+        LOG_INF("PDIA", "cert=%u from=%04d%02d%02d to=%04d%02d%02d utc=%lld", static_cast<unsigned>(count),
+                cert->valid_from.year, cert->valid_from.mon, cert->valid_from.day, cert->valid_to.year,
+                cert->valid_to.mon, cert->valid_to.day, static_cast<long long>(now));
 #endif
       total += cert->raw.len;
       if (++count > 8 || total > 32768 || compareDate(cert->valid_from, utc) > 0 ||
@@ -723,8 +726,10 @@ void runDiagnostics() {
   static const char* const probes[] = {
       "https://raw.githubusercontent.com/crosspoint-reader/crosspoint-plugin-hub/main/catalog.json",
       "https://pluginhub.crosspointreader.com/device.json",
-      "https://wrong.host.badssl.com/", "https://self-signed.badssl.com/",
-      "https://untrusted-root.badssl.com/", "https://expired.badssl.com/",
+      "https://wrong.host.badssl.com/",
+      "https://self-signed.badssl.com/",
+      "https://untrusted-root.badssl.com/",
+      "https://expired.badssl.com/",
       "https://127.0.0.1/"};
   LOG_INF("PDIA", "begin synchronized=%u gate=closed hubReadOnly=1", halClock.hasSynchronizedSystemTime());
   for (unsigned i = 0; i < sizeof(probes) / sizeof(probes[0]); ++i) {
@@ -736,14 +741,18 @@ void runDiagnostics() {
     const uint32_t started = millis();
     const int status = requestStream(
         nullptr, probes[i], "GET", "", {}, [](int, const Headers&, long) { return true; },
-        [&](const uint8_t*, size_t n) { received += n; return true; }, complete, nullptr, 256 * 1024);
-    LOG_INF("PDIA", "case=%u status=%d complete=%u stage=%u httpWritten=%u writeCalls=%u bodyBytes=%u ms=%u "
-                    "synchronized=%u heap=%u largest=%u psram=%u psramLargest=%u stack=%u",
+        [&](const uint8_t*, size_t n) {
+          received += n;
+          return true;
+        },
+        complete, nullptr, 256 * 1024);
+    LOG_INF("PDIA",
+            "case=%u status=%d complete=%u stage=%u httpWritten=%u writeCalls=%u bodyBytes=%u ms=%u "
+            "synchronized=%u heap=%u largest=%u psram=%u psramLargest=%u stack=%u",
             i, status, complete, diagnosticStage, static_cast<unsigned>(diagnosticWrites),
             static_cast<unsigned>(diagnosticWriteCalls), static_cast<unsigned>(received), millis() - started,
-            halClock.hasSynchronizedSystemTime(),
-            ESP.getFreeHeap(), ESP.getMaxAllocHeap(), ESP.getFreePsram(), ESP.getMaxAllocPsram(),
-            static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)));
+            halClock.hasSynchronizedSystemTime(), ESP.getFreeHeap(), ESP.getMaxAllocHeap(), ESP.getFreePsram(),
+            ESP.getMaxAllocPsram(), static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)));
   }
   diagnosticStage = 0;
   diagnosticWrites = 0;
