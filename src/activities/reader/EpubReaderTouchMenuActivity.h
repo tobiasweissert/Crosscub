@@ -48,7 +48,6 @@ class EpubReaderTouchMenuActivity final : public Activity {
   bool allowFrontlightPanelGesture() const override { return false; }
   bool requiresFreshBackdrop() const override { return true; }
   bool allowPowerAsConfirmInReaderMode() const override { return true; }
-  bool allowGlobalHomeGesture() const override { return true; }
   // Route the touch-screen edge swipe through loop() so it can go Home while
   // preserving the capacitive Home key's existing drawer-back behavior.
   bool allowGlobalHomeSwipeGesture() const override { return false; }

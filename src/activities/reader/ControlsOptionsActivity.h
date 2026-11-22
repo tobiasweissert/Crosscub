@@ -56,7 +56,6 @@ class ControlsOptionsActivity final : public Activity {
         uiTarget(makeUiTarget(renderer)),
         app(uiTarget, uiTarget.deviceContext()) {}
   void onEnter() override;
-  void onExit() override;
   void loop() override;
   void render(RenderLock&&) override;
   bool allowPowerAsConfirmInReaderMode() const override { return true; }

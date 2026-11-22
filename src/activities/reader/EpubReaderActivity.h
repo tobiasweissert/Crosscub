@@ -539,7 +539,6 @@ class EpubReaderActivity final : public ReaderActivity {
     return sectionBuildWantsTick() && !backgroundBuildPausedForLowMemory &&
            !backgroundBuildYieldForInput.load(std::memory_order_relaxed);
   }
-  bool isReaderActivity() const override { return true; }
   bool isEpubReaderActivity() const override { return true; }
   void onInputLockChanged(bool locked) override;
   void onUserInput() override;

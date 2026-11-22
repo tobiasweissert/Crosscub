@@ -17,7 +17,6 @@ class EpubReaderBookmarkListActivity final : public Activity {
                                  const std::vector<BookmarkRecord>& bookmarks);
 
   void onEnter() override;
-  void onExit() override;
   void loop() override;
   void render(RenderLock&&) override;
   bool isReaderActivity() const override { return true; }

@@ -77,8 +77,6 @@ void ControlsOptionsActivity::onEnter() {
   requestUpdate();
 }
 
-void ControlsOptionsActivity::onExit() { Activity::onExit(); }
-
 void ControlsOptionsActivity::rebuildSettingsList() {
   settings.clear();
   powerSettings.clear();

@@ -77,13 +77,13 @@ bool wasTapped(const MappedInputManager& input, const GfxRenderer& renderer) {
   return wasTapped(input, headerRect(renderer, input));
 }
 
-void draw(GfxRenderer& renderer, const Rect& header, const char* title, const bool readerContext,
+void draw(const GfxRenderer& renderer, const Rect& header, const char* title, const bool readerContext,
           const int rightReserve, const char* subtitle, const int verticalOffset) {
   auto target = makeUiTarget(renderer);
   draw(renderer, target, header, title, readerContext, rightReserve, subtitle, verticalOffset);
 }
 
-void draw(GfxRenderer& renderer, fui::GfxRendererTarget& target, const Rect& header, const char* title,
+void draw(const GfxRenderer& renderer, fui::GfxRendererTarget& target, const Rect& header, const char* title,
           const bool readerContext, const int rightReserve, const char* subtitle, const int verticalOffset) {
   Layout back = layout(header);
   const int offset = effectiveVerticalOffset(back, header, verticalOffset);
@@ -107,7 +107,7 @@ void draw(GfxRenderer& renderer, fui::GfxRendererTarget& target, const Rect& hea
                 fui::bitmapFromIcon(icon_back_32), fui::BitmapMode::Center);
 }
 
-void drawCompact(GfxRenderer& renderer, const char* title, const bool readerContext, const bool showDate,
+void drawCompact(const GfxRenderer& renderer, const char* title, const bool readerContext, const bool showDate,
                  const int verticalOffset) {
   const auto& metrics = UITheme::getInstance().getMetrics();
   const Rect header = compactHeaderRect(renderer);

@@ -129,7 +129,6 @@ class XtcReaderActivity final : public ReaderActivity {
     formatPagesUntilFullRefresh = -1;
     return true;
   }
-  bool isReaderActivity() const override { return true; }
   bool usesFullScreenReaderVerticalSwipes() const override {
 #if defined(FREEINK_DEVICE_STICKY) && FREEINK_DEVICE_STICKY
     return true;
@@ -161,6 +160,6 @@ class XtcReaderActivity final : public ReaderActivity {
   // Renders the last saved page to the frame buffer without flushing to display.
   // Used by SleepActivity to prepare the background for the overlay sleep mode.
   // Returns false if the page cannot be loaded (missing cache / file error).
-  static bool drawCurrentPageToBuffer(const std::string& filePath, GfxRenderer& renderer);
+  static bool drawCurrentPageToBuffer(const std::string& filePath, const GfxRenderer& renderer);
   ScreenshotInfo getScreenshotInfo() const override;
 };
