@@ -1933,9 +1933,8 @@ void EpubReaderTouchMenuActivity::loop() {
     scrollBy(swipe == MappedInputManager::SwipeDir::Up ? visibleRows : -visibleRows);
     return;
   }
-  fui::InputSnapshot snap{};
   if (uiReady) {
-    snap = touchSnapshotFrom(mappedInput);
+    fui::InputSnapshot snap = touchSnapshotFrom(mappedInput);
     // List rows (and the Percent/StablePage keypad, which is buttons only, not a
     // slider) activate on release. Do not route their touch-down edge, otherwise a
     // swipe briefly paints the row where the finger landed as pressed even though it
