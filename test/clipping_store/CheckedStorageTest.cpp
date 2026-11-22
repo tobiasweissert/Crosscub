@@ -5,6 +5,33 @@
 
 #include <array>
 #include <functional>
+#include <type_traits>
+
+static_assert(std::is_constructible_v<CheckedClippingId, const char*>,
+              "Clipping IDs must remain directly constructible from C strings");
+static_assert(!std::is_convertible_v<const char*, CheckedClippingId>,
+              "Clipping IDs must reject unintended implicit C-string conversions");
+
+TEST(CheckedClippingId, DirectConstructionPreservesEmptyExactAndTruncatedIdsWithoutAllocation) {
+  fake::reset();
+  const auto attempts = fake::checkedAllocationAttempts;
+  const CheckedClippingId empty("");
+  EXPECT_TRUE(empty.empty());
+  EXPECT_EQ(empty.size(), 0u);
+  EXPECT_STREQ(empty.c_str(), "");
+  const std::string exactText(64, 'x');
+  const CheckedClippingId exact(exactText.c_str());
+  EXPECT_EQ(exact.size(), 64u);
+  EXPECT_STREQ(exact.c_str(), exactText.c_str());
+  EXPECT_EQ(exact.data()[64], '\0');
+  const std::string longerText = exactText + "suffix";
+  const CheckedClippingId truncated(longerText.c_str());
+  EXPECT_EQ(truncated.size(), 64u);
+  EXPECT_STREQ(truncated.c_str(), exactText.c_str());
+  EXPECT_EQ(truncated.data()[64], '\0');
+  EXPECT_EQ(truncated, exact);
+  EXPECT_EQ(fake::checkedAllocationAttempts, attempts);
+}
 
 namespace {
 std::string snapshotPath() {

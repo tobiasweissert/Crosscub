@@ -150,7 +150,7 @@ class CheckedClippingStorage {
 struct CheckedClippingId {
   char bytes[65]{};
   CheckedClippingId() = default;
-  CheckedClippingId(const char* id) {
+  explicit CheckedClippingId(const char* id) {
     size_t n = 0;
     while (n < sizeof(bytes) - 1 && id[n]) ++n;
     std::memcpy(bytes, id, n);

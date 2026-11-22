@@ -199,7 +199,7 @@ bool ClippingStore::loadForBookImpl(const std::string& filePath, const std::stri
         return loaded = false;
       for (const char* p = id; *p; ++p)
         if (static_cast<unsigned char>(*p) < 0x20 || static_cast<unsigned char>(*p) >= 0x7f) return loaded = false;
-      if (!deletedIds.push_back(id)) {
+      if (!deletedIds.push_back(CheckedClippingId(id))) {
         clippings.clear();
         deletedIds.clear();
         return loaded = false;
@@ -266,7 +266,7 @@ bool ClippingStore::removeClippingAt(const size_t index) {
   if (!loaded || index >= clippings.size()) return false;
   if (clippings[index].id[0] && deletedIds.size() >= UINT16_MAX) return false;
   const size_t oldDeletionCount = deletedIds.size();
-  if (clippings[index].id[0] && !deletedIds.push_back(clippings[index].id)) return false;
+  if (clippings[index].id[0] && !deletedIds.push_back(CheckedClippingId(clippings[index].id))) return false;
   Clipping clipping = std::move(clippings[index]);
   clippings.erase(clippings.begin() + index);
   dirty = true;
@@ -368,7 +368,7 @@ void ClippingStore::clearAll() {
     return;
   for (const auto& c : clippings) {
     if (c.id[0] && std::find(deletedIds.begin(), deletedIds.end(), c.id) == deletedIds.end())
-      deletedIds.push_back(c.id);  // admitted above
+      deletedIds.push_back(CheckedClippingId(c.id));  // admitted above
   }
   if (deletedIds.size() > UINT16_MAX) {
     deletedIds = std::move(oldDeleted);
@@ -453,7 +453,7 @@ bool ClippingStore::readVersionedFile(const std::string& path, CheckedClippingSt
       char id[65];
       if (f.read(reinterpret_cast<uint8_t*>(id), sizeof(id)) != sizeof(id) || !memchr(id, 0, sizeof(id)) || !id[0])
         return false;
-      if (deletions && !deletions->push_back(id)) return allocationRefused();
+      if (deletions && !deletions->push_back(CheckedClippingId(id))) return allocationRefused();
     }
   }
   if (!allowAllocation && count > out.capacity()) return false;
