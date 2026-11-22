@@ -115,10 +115,10 @@ class EpubReaderActivity final : public ReaderActivity {
   std::string pendingAnchor;
   std::string pendingFootnotePreviewAnchor;
   bool activeFootnotePreview = false;
-  int pagesUntilFullRefresh = 0;
+  int formatPagesUntilFullRefresh = 0;
   // A Sync Progress return can leave non-reader UI on the panel. This is a
   // one-shot clean base for its first image page; normal image-page cleanup
-  // uses pagesUntilFullRefresh independently.
+  // uses formatPagesUntilFullRefresh independently.
   bool cleanImageBasePending = false;
   bool skipRecentBookUpdateOnEntry = false;
   int cachedSpineIndex = 0;
@@ -254,7 +254,7 @@ class EpubReaderActivity final : public ReaderActivity {
   // Consumed in onExit() to relocate the finished book into /Read/.
   bool pendingReadFolderMove = false;
   // The end screen owns these UI resources only while it is visible.
-  std::unique_ptr<EndOfBookOptions> endOfBookOptions;
+  std::unique_ptr<EndOfBookOptions> formatEndOfBookOptions;
 
   // Footnote support
   std::vector<FootnoteEntry> currentPageFootnotes;
@@ -489,13 +489,13 @@ class EpubReaderActivity final : public ReaderActivity {
                        initialRefreshCountdown > 0),
         epub(std::move(epub)),
         initialBookReaderSettings(readerSettings),
-        pagesUntilFullRefresh(initialRefreshCountdown),
+        formatPagesUntilFullRefresh(initialRefreshCountdown),
         cleanImageBasePending(cleanImageBaseOnEntry),
         skipRecentBookUpdateOnEntry(skipRecentBookUpdateOnEntry) {}
 
   explicit EpubReaderActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, std::string path, bool fast)
       : ReaderActivity("EpubReader", renderer, mappedInput, std::move(path), fast),
-        pagesUntilFullRefresh(fast ? std::max(2, static_cast<int>(SETTINGS.getRefreshFrequency())) : 0),
+        formatPagesUntilFullRefresh(fast ? std::max(2, static_cast<int>(SETTINGS.getRefreshFrequency())) : 0),
         skipRecentBookUpdateOnEntry(fast) {}
   bool handleSideShortcut(uint8_t action) override;
   std::atomic<bool> radioReleasedForBuild{false};
@@ -519,7 +519,7 @@ class EpubReaderActivity final : public ReaderActivity {
   bool handleTwoFingerSwipeAction(CrossPointSettings::TWO_FINGER_SWIPE_ACTION action) override;
   bool handleTwoFingerRotation(bool clockwise) override;
   bool prepareManualRefresh() override {
-    pagesUntilFullRefresh = -1;
+    formatPagesUntilFullRefresh = -1;
     cleanImageBasePending = true;
     return true;
   }

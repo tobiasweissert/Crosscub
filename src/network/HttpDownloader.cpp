@@ -187,10 +187,13 @@ HttpDownloader::DownloadError runGetDefault(const std::string& url, const std::s
     if (options && !options->accept.empty()) esp_http_client_set_header(client, "Accept", options->accept.c_str());
     if (options && !options->acceptLanguage.empty())
       esp_http_client_set_header(client, "Accept-Language", options->acceptLanguage.c_str());
-    const bool post = options && options->body;
-    if (post)
-      esp_http_client_set_method(client, strcmp(options->method, "PUT") == 0 ? HTTP_METHOD_PUT : HTTP_METHOD_POST);
-    const size_t bodySize = post ? options->body->size() : 0;
+    const std::string* requestBody = nullptr;
+    if (options) {
+      requestBody = options->body;
+      if (requestBody)
+        esp_http_client_set_method(client, strcmp(options->method, "PUT") == 0 ? HTTP_METHOD_PUT : HTTP_METHOD_POST);
+    }
+    const size_t bodySize = requestBody ? requestBody->size() : 0;
     esp_err_t err = esp_http_client_open(client, bodySize);
     if (err != ESP_OK) {
       LOG_ERR("HTTP", "Open failed: %s", esp_err_to_name(err));
@@ -200,14 +203,14 @@ HttpDownloader::DownloadError runGetDefault(const std::string& url, const std::s
       return HttpDownloader::HTTP_ERROR;
     }
 
-    if (post) {
+    if (requestBody) {
       size_t sent = 0;
       while (sent < bodySize) {
         if (isCancelRequested(sink.cancelFlag, sink.shouldCancel)) {
           esp_http_client_cleanup(client);
           return HttpDownloader::ABORTED;
         }
-        const int n = esp_http_client_write(client, options->body->data() + sent, bodySize - sent);
+        const int n = esp_http_client_write(client, requestBody->data() + sent, bodySize - sent);
         if (n <= 0) {
           esp_http_client_cleanup(client);
           return HttpDownloader::HTTP_ERROR;
@@ -229,7 +232,7 @@ HttpDownloader::DownloadError runGetDefault(const std::string& url, const std::s
     }
 
     if (isRedirect(status)) {
-      if (post) {
+      if (requestBody) {
         esp_http_client_cleanup(client);
         return HttpDownloader::HTTP_ERROR;
       }

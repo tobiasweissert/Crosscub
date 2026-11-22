@@ -26,8 +26,8 @@ bool DictionaryRegistry::discover() {
 }
 
 bool DictionaryRegistry::discover(std::vector<DictionaryEntry>& out) {
-  std::string root;
-  return scan(out, root);
+  std::string scannedRoot;
+  return scan(out, scannedRoot);
 }
 
 bool DictionaryRegistry::scan(std::vector<DictionaryEntry>& entries_, std::string& root_) {
@@ -168,10 +168,9 @@ void DictionaryRegistry::clear() {
 
 int DictionaryRegistry::indexOf(const std::string& basePath) const {
   if (basePath.empty()) return -1;
-  for (size_t i = 0; i < entries_.size(); i++) {
-    if (entries_[i].basePath == basePath) return static_cast<int>(i);
-  }
-  return -1;
+  const auto match = std::find_if(entries_.begin(), entries_.end(),
+                                  [&basePath](const DictionaryEntry& entry) { return entry.basePath == basePath; });
+  return match == entries_.end() ? -1 : static_cast<int>(match - entries_.begin());
 }
 
 void DictionaryRegistry::maybeAutoSelectDefaultDictionary() const {

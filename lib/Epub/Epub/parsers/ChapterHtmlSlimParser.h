@@ -353,7 +353,7 @@ class ChapterHtmlSlimParser {
 
  public:
   explicit ChapterHtmlSlimParser(
-      std::shared_ptr<Epub> epub, const std::string& filepath, GfxRenderer& renderer, const int fontId,
+      std::shared_ptr<Epub> epub, const std::string& filepath, GfxRenderer& gfxRenderer, const int fontId,
       const float lineCompression, const bool extraParagraphSpacing, const uint8_t paragraphAlignment,
       const uint16_t viewportWidth, const uint16_t viewportHeight, const bool hyphenationEnabled,
       const bool focusReadingEnabled,
@@ -364,7 +364,7 @@ class ChapterHtmlSlimParser {
 
       : epub(epub),
         filepath(filepath),
-        renderer(renderer),
+        renderer(gfxRenderer),
         fontId(fontId),
         lineCompression(lineCompression),
         extraParagraphSpacing(extraParagraphSpacing),
@@ -383,7 +383,7 @@ class ChapterHtmlSlimParser {
         tocAnchors(std::move(tocAnchors)) {}
 
   ChapterHtmlSlimParser(
-      Epub& book, const std::string& path, GfxRenderer& renderer, int font, float compression, bool extraSpacing,
+      Epub& book, const std::string& path, GfxRenderer& gfxRenderer, int font, float compression, bool extraSpacing,
       bool forceIndents, uint8_t alignment, uint16_t width, uint16_t height, bool hyphenation, bool focus, bool guide,
       uint8_t wordSpacing,
       const std::function<void(std::unique_ptr<Page>, uint16_t, uint16_t, uint32_t, uint32_t)>& callback, bool embedded,
@@ -391,7 +391,7 @@ class ChapterHtmlSlimParser {
       const std::function<void()>& popup = nullptr, const CssParser* css = nullptr,
       EpubRenderMode mode = EpubRenderMode::CrossSmudgeDefault, std::string preview = {}, uint16_t maxPreviewPages = 0,
       bool referenceCharacters = false)
-      : ChapterHtmlSlimParser(std::shared_ptr<Epub>{}, path, renderer, font, compression, extraSpacing, alignment,
+      : ChapterHtmlSlimParser(std::shared_ptr<Epub>{}, path, gfxRenderer, font, compression, extraSpacing, alignment,
                               width, height, hyphenation, focus, {}, embedded, base, images, imageMode,
                               std::move(anchors), popup, css) {
     epub = std::shared_ptr<Epub>(std::shared_ptr<Epub>{}, &book);

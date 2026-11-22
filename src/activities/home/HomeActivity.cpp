@@ -1805,7 +1805,7 @@ void HomeActivity::loop() {
   auto activateSelectedHomeItem = [this, visibleBookCount, &activateHomeMenuAction]() {
     const auto& metrics = UITheme::getInstance().getMetrics();
     if (!metrics.homeContinueReadingInMenu && selectorIndex < visibleBookCount) {
-      onSelectBook(recentBooks[selectorIndex].path);
+      openHomeBook(recentBooks[selectorIndex].path);
       return;
     }
 
@@ -2304,7 +2304,7 @@ void HomeActivity::updateSlidingWindowCache(int centerIdx, int bookCount) {
   (void)bookCount;
 }
 
-void HomeActivity::onSelectBook(const std::string& path) {
+void HomeActivity::openHomeBook(const std::string& path) {
   // renderCarouselFrame() uses the same static cache on the render task. Hold
   // its lock while invalidating so a book selection cannot free a destination
   // buffer midway through the snapshot copy.
@@ -2328,7 +2328,7 @@ void HomeActivity::onContinueReading() {
       static_cast<CrossPointSettings::UI_THEME>(SETTINGS.uiTheme) == CrossPointSettings::UI_THEME::LYRA_CAROUSEL;
   const int bookIndex = isCarousel ? getHighlightedBookIndex() : 0;
   if (bookIndex >= 0 && bookIndex < static_cast<int>(recentBooks.size())) {
-    onSelectBook(recentBooks[bookIndex].path);
+    openHomeBook(recentBooks[bookIndex].path);
   }
 }
 

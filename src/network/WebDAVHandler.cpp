@@ -6,6 +6,8 @@
 #include <LibraryBuilder.h>
 #include <Logging.h>
 
+#include <algorithm>
+
 #include "ProtectedPaths.h"
 #include "activities/home/BookActions.h"
 #include "util/BookCacheUtils.h"
@@ -17,8 +19,8 @@ namespace {
 // canonical-path checks. Prefix matching also protects temp/backup siblings.
 bool networkCredentialPath(const char* path) {
   std::string mapped(path);
-  for (char& c : mapped)
-    if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
+  std::transform(mapped.begin(), mapped.end(), mapped.begin(),
+                 [](char c) { return c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c; });
   const auto mapFamily = [&](const char* from, const char* to) {
     size_t at = 0;
     while ((at = mapped.find(from, at)) != std::string::npos) {

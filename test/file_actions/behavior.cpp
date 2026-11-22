@@ -1,6 +1,37 @@
 int main() {
   std::cout << std::unitbuf;
   {
+    // Exercise both paths and every byte through the actual checked intent helper.
+    // High-bit filename bytes must not become negative control characters.
+    for (unsigned int byte = 0; byte <= 0xff; ++byte) {
+      for (bool destination : {false, true}) {
+        Storage = {};
+        events.clear();
+        std::string from = "/Books/From.epub", to = "/Books/To.epub";
+        (destination ? to : from).insert(7, 1, static_cast<char>(byte));
+        const bool valid = byte >= 0x20 && byte != 0x7f;
+        assert(writeMoveIntent(from, to) == valid);
+        if (valid) {
+          assert(events == std::vector<std::string>{"intent-create"});
+          assert(Storage.journalBytes.at(BOOK_MOVE_PENDING) == "CPBOOKMOVE1\n" + from + "\n" + to + "\n");
+          const auto retained = Storage.journalBytes;
+          assert(!writeMoveIntent(from, to) && Storage.journalBytes == retained);
+        } else {
+          assert(events.empty() && Storage.paths.empty() && Storage.journalBytes.empty());
+        }
+      }
+    }
+    Storage = {};
+    events.clear();
+    assert(!writeMoveIntent("/Books/Bad\n.epub", "/Books/AlsoBad\177.epub") && events.empty());
+    assert(writeMoveIntent("", ""));
+    assert(Storage.journalBytes.at(BOOK_MOVE_PENDING) == "CPBOOKMOVE1\n\n\n");
+    Storage = {};
+    events.clear();
+    std::cout
+        << "PASS intent validates both paths across all 256 bytes before storage and preserves exact marker bytes\n";
+  }
+  {
     FileBrowserActivity oom;
     failActivityAllocation = true;
     oom.startMoveFile("/Books/A.epub", "A.epub");

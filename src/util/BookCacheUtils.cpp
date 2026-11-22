@@ -196,7 +196,6 @@ bool restorePreservedFiles(const std::string& cachePath, const std::vector<Resol
   }
 
   bool restoredAny = false;
-  bool ok = true;
   for (size_t i = 0; i < files.size(); i++) {
     if (movedFiles && !movedFiles[i]) {
       continue;
@@ -221,15 +220,14 @@ bool restorePreservedFiles(const std::string& cachePath, const std::vector<Resol
   if (restoredAny) {
     LOG_DBG("BookCache", "Restored preserved user cache state: %s", cachePath.c_str());
   }
-  return ok;
+  return true;
 }
 
 bool preserveUserStateFiles(const std::string& cachePath, const std::vector<ResolvedPreservedCacheFile>& files,
                             bool* movedFiles) {
-  for (const auto& file : files) {
-    if (Storage.exists((cachePath + "." + file.tmpName).c_str())) return false;
-  }
-  bool ok = true;
+  if (std::any_of(files.begin(), files.end(),
+                  [&cachePath](const auto& file) { return Storage.exists((cachePath + "." + file.tmpName).c_str()); }))
+    return false;
   for (size_t i = 0; i < files.size(); i++) {
     if (movedFiles) {
       movedFiles[i] = false;
@@ -248,7 +246,7 @@ bool preserveUserStateFiles(const std::string& cachePath, const std::vector<Reso
       movedFiles[i] = true;
     }
   }
-  return ok;
+  return true;
 }
 
 bool clearBookCacheForPath(const std::string& path) {
@@ -267,9 +265,9 @@ bool clearBookCacheForPath(const std::string& path) {
 // Durable encompassing latch: a failed FAT acknowledgement is not rollback evidence.
 bool hasCacheRecoveryRoots(const std::string& cachePath, const std::vector<ResolvedPreservedCacheFile>& files) {
   if (Storage.exists((cachePath + ".cache-clear.pending").c_str())) return true;
-  for (const auto& file : files)
-    if (Storage.exists((cachePath + "." + file.tmpName).c_str())) return true;
-  return false;
+  return std::any_of(files.begin(), files.end(), [&cachePath](const auto& file) {
+    return Storage.exists((cachePath + "." + file.tmpName).c_str());
+  });
 }
 
 bool beginCacheClear(const std::string& cachePath, const std::vector<ResolvedPreservedCacheFile>& files) {
@@ -313,7 +311,7 @@ bool clearCacheDirectoryPreservingFiles(const std::string& cachePath, const Pres
   const bool clearOk = Storage.removeDir(cachePath.c_str());
   if (!clearOk) return false;  // Retain roots after uncertain directory deletion.
   const bool restoreOk = restorePreservedFiles(cachePath, preservedFiles, movedFiles);
-  return clearOk && restoreOk && Storage.remove((cachePath + ".cache-clear.pending").c_str());
+  return restoreOk && Storage.remove((cachePath + ".cache-clear.pending").c_str());
 }
 
 }  // namespace
@@ -367,7 +365,7 @@ bool clearBookCachePreservingUserState(const std::string& path) {
   const bool clearOk = clearBookCacheForPath(path);
   if (!clearOk) return false;  // Retain roots after uncertain cache deletion.
   const bool restoreOk = restorePreservedFiles(cachePath, resolvedFiles, movedFiles);
-  return clearOk && restoreOk && Storage.remove((cachePath + ".cache-clear.pending").c_str());
+  return restoreOk && Storage.remove((cachePath + ".cache-clear.pending").c_str());
 }
 
 bool clearBookCacheDirectoryPreservingStats(const std::string& cachePath) {

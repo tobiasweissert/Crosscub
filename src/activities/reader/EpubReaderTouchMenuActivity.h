@@ -224,7 +224,7 @@ class EpubReaderTouchMenuActivity final : public Activity {
   bool saveBookDictionary(const std::string& path);
   const char* rowLabel(RowId row) const;
   const char* rowValue(RowId row, char* buffer, size_t bufferSize) const;
-  bool rowIsToggle(RowId row) const;
+  static bool rowIsToggle(RowId row);
   bool rowShowsNavigationCaret(RowId row) const;
   bool rowToggleValue(RowId row) const;
   const char* paneTitle() const;

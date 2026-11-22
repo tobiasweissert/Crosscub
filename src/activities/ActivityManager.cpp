@@ -160,7 +160,7 @@ bool openFrontlightPanel(Activity& activity, GfxRenderer& renderer, MappedInputM
   return true;
 }
 
-bool applyTwoFingerSwipeAction(Activity& activity, MappedInputManager& mappedInput, GfxRenderer& renderer,
+bool applyTwoFingerSwipeAction(Activity& activity, MappedInputManager& mappedInput, const GfxRenderer& renderer,
                                ActivityManager& activityManager) {
   MappedInputManager::CompletedSwipe completed;
   if (!mappedInput.wasCompletedMultiTouchSwipe(completed)) return false;
@@ -357,7 +357,9 @@ void ActivityManager::loop() {
     mappedInput.setPowerAsConfirmInReaderMode(false);
   }
 
-  while (pendingAction != PendingAction::None) {
+  // Activity callbacks can enqueue another transition. Query the live queue at each dispatch boundary.
+  const auto hasPendingAction = [this] { return pendingAction != PendingAction::None; };
+  while (hasPendingAction()) {
     // The page turner's radio gives its heap back before the next screen allocates. Its teardown
     // can span loop passes and runs outside the render lock.
     if (pendingAction != PendingAction::ReplaceForSleep &&
@@ -406,7 +408,7 @@ void ActivityManager::loop() {
         // Queue an update to ensure the popped activity gets re-rendered. A
         // partial-screen overlay first restores the full-screen activity below
         // it now that the result handler has finished reconciling settings.
-        if (pendingAction == PendingAction::None) {
+        if (!hasPendingAction()) {
           lock.unlock();
           if (currentActivity->requiresFreshBackdrop()) restoreBackdropBehindCurrentOverlay();
           requestUpdate();
@@ -455,14 +457,13 @@ void ActivityManager::loop() {
       lock.unlock();  // onEnter may acquire its own lock
       currentActivity->onEnter();
 
-      if (pendingAction == PendingAction::None && pendingReaderMenuAction >= 0 &&
-          currentActivity->isEpubReaderActivity()) {
+      if (!hasPendingAction() && pendingReaderMenuAction >= 0 && currentActivity->isEpubReaderActivity()) {
         const uint8_t action = static_cast<uint8_t>(pendingReaderMenuAction);
         pendingReaderMenuAction = -1;
         currentActivity->handleExternalReaderMenuAction(action);
       }
 
-      if (pendingAction == PendingAction::None && APP_STATE.pendingOverlayResume.valid()) {
+      if (!hasPendingAction() && APP_STATE.pendingOverlayResume.valid()) {
         const PendingOverlayResume resume = APP_STATE.pendingOverlayResume;
         if (resume.returnHomeAfterReaderFlow && currentActivity->isEpubReaderActivity() &&
             (resume.bookPath.empty() || resume.bookPath == currentActivity->getCurrentBookPath())) {
@@ -498,7 +499,7 @@ void ActivityManager::loop() {
     }
   }
 
-  if (APP_STATE.hasPendingAlert.load(std::memory_order_acquire) && pendingAction == PendingAction::None) {
+  if (APP_STATE.hasPendingAlert.load(std::memory_order_acquire) && !hasPendingAction()) {
     APP_STATE.hasPendingAlert.store(false, std::memory_order_relaxed);
     pushActivity(std::make_unique<AlertActivity>(renderer, mappedInput));
   }

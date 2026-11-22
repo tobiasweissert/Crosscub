@@ -6,6 +6,32 @@
 #include "stubs.h"
 #include "sync.inc"
 int main() {
+  // Body presence, not byte count, selects GET versus POST/PUT. Empty uploads
+  // must retain their method and must not be replayed through a redirect.
+  const auto consume = [](const uint8_t*, size_t) { return true; };
+  for (const char* method : {"POST", "PUT"}) {
+    HttpDownloader::DownloadOptions request;
+    request.method = method;
+    fixture({{200, "ok", "", "", true}});
+    assert(HttpDownloader::streamUrl("https://example.org/body", consume, nullptr, "", "", request) ==
+           HttpDownloader::OK);
+    assert(requests.size() == 1 && requests[0].method == 0 && requests[0].sent.empty() &&
+           requests[0].openedBodySize == 0);
+    for (const std::string& payload : {std::string(), std::string("a\0b", 3)}) {
+      request.body = &payload;
+      fixture({{200, "ok", "", "", true}});
+      assert(HttpDownloader::streamUrl("https://example.org/body", consume, nullptr, "", "", request) ==
+             HttpDownloader::OK);
+      assert(requests.size() == 1 &&
+             requests[0].method == (std::string(method) == "PUT" ? HTTP_METHOD_PUT : HTTP_METHOD_POST));
+      assert(requests[0].openedBodySize == payload.size() && requests[0].sent == payload);
+      fixture({{302, "", "https://example.org/redirect", "", true}, {200, "must-not-send", "", "", true}});
+      assert(HttpDownloader::streamUrl("https://example.org/body", consume, nullptr, "", "", request) ==
+             HttpDownloader::HTTP_ERROR);
+      assert(requests.size() == 1 && nextResponse == 1 && requests[0].sent == payload);
+    }
+  }
+  std::cout << "production HTTP: absent/empty/binary body GET/POST/PUT and no upload redirect replay PASS\n";
   fixture({{200, "{\"ok\":true}", "", "", true}});
   SyncHttpClient sync;
   assert(sync.begin("https://sync.example.org/progress"));

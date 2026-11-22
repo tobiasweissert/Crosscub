@@ -26,7 +26,7 @@ class XtcReaderActivity final : public ReaderActivity {
   std::shared_ptr<Xtc> xtc;
 
   uint32_t currentPage = 0;
-  int pagesUntilFullRefresh = 0;
+  int formatPagesUntilFullRefresh = 0;
   unsigned long lastPageTurnTime = 0UL;
   unsigned long pageShownAtMs = 0UL;
   uint32_t sessionReadingSeconds = 0;
@@ -57,7 +57,7 @@ class XtcReaderActivity final : public ReaderActivity {
   bool skipRecentBookUpdateOnEntry = false;
   ReaderProgressSaveDebouncer progressSaveDebouncer;
   // The end screen owns these UI resources only while it is visible.
-  std::unique_ptr<EndOfBookOptions> endOfBookOptions;
+  std::unique_ptr<EndOfBookOptions> formatEndOfBookOptions;
 
   enum class StatusBarOverlayPosition { Bottom, Top };
   struct StatusBarInfo {
@@ -103,12 +103,12 @@ class XtcReaderActivity final : public ReaderActivity {
       : ReaderActivity("XtcReader", renderer, mappedInput, xtc ? xtc->getPath() : std::string{},
                        initialRefreshCountdown > 0),
         xtc(std::move(xtc)),
-        pagesUntilFullRefresh(initialRefreshCountdown),
+        formatPagesUntilFullRefresh(initialRefreshCountdown),
         skipRecentBookUpdateOnEntry(skipRecentBookUpdateOnEntry) {}
 
   explicit XtcReaderActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, std::string path, bool fast)
       : ReaderActivity("XtcReader", renderer, mappedInput, std::move(path), fast),
-        pagesUntilFullRefresh(fast ? std::max(2, static_cast<int>(SETTINGS.getRefreshFrequency())) : 0),
+        formatPagesUntilFullRefresh(fast ? std::max(2, static_cast<int>(SETTINGS.getRefreshFrequency())) : 0),
         skipRecentBookUpdateOnEntry(fast) {}
   bool loadBook() override;
   std::string getBookTitle() const override { return xtc ? xtc->getTitle() : ""; }
@@ -126,7 +126,7 @@ class XtcReaderActivity final : public ReaderActivity {
   void render(RenderLock&&) override;
   bool handleTwoFingerSwipeAction(CrossPointSettings::TWO_FINGER_SWIPE_ACTION action) override;
   bool prepareManualRefresh() override {
-    pagesUntilFullRefresh = -1;
+    formatPagesUntilFullRefresh = -1;
     return true;
   }
   bool isReaderActivity() const override { return true; }

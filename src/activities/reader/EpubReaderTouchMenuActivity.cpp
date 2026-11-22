@@ -1469,12 +1469,8 @@ void EpubReaderTouchMenuActivity::showEnumOptions(const RowId row) {
         raw.push_back(0);
       }
       if (hasDictionaryFontOverride && dictionaryFontFamilyName[0] != '\0') {
-        for (size_t i = 1; i < labels.size(); ++i) {
-          if (labels[i] == dictionaryFontFamilyName) {
-            currentRaw = raw[i];
-            break;
-          }
-        }
+        const auto match = std::find(std::next(labels.begin()), labels.end(), dictionaryFontFamilyName);
+        if (match != labels.end()) currentRaw = raw[std::distance(labels.begin(), match)];
       }
       break;
     }
@@ -1924,9 +1920,8 @@ void EpubReaderTouchMenuActivity::loop() {
     scrollBy(swipe == MappedInputManager::SwipeDir::Up ? visibleRows : -visibleRows);
     return;
   }
-  fui::InputSnapshot snap{};
   if (uiReady) {
-    snap = touchSnapshotFrom(mappedInput);
+    fui::InputSnapshot snap = touchSnapshotFrom(mappedInput);
     // List rows (and the Percent/StablePage keypad, which is buttons only, not a
     // slider) activate on release. Do not route their touch-down edge, otherwise a
     // swipe briefly paints the row where the finger landed as pressed even though it
@@ -2172,12 +2167,15 @@ const char* EpubReaderTouchMenuActivity::rowValue(const RowId row, char* buffer,
     }
     case RowId::IndexingMethod:
       return draft.indexingMethod == 0 ? tr(STR_INDEXING_INCREMENTAL) : tr(STR_INDEXING_FULL_SECTION);
-    case RowId::BookDictionary:
+    case RowId::BookDictionary: {
       if (bookDictionaryPath.empty()) return tr(STR_DICT_USE_GLOBAL);
-      for (size_t i = 1; i < dictionaryPaths.size(); ++i) {
-        if (dictionaryPaths[i] == bookDictionaryPath) return dictionaryLabels[i].c_str();
+      if (!dictionaryPaths.empty()) {
+        const auto match = std::find(std::next(dictionaryPaths.begin()), dictionaryPaths.end(), bookDictionaryPath);
+        if (match != dictionaryPaths.end())
+          return dictionaryLabels[std::distance(dictionaryPaths.begin(), match)].c_str();
       }
       return tr(STR_UNAVAILABLE);
+    }
     case RowId::DictionaryFontFamily:
       return hasDictionaryFontOverride ? dictionaryFontFamilyName : tr(STR_DICT_USE_GLOBAL);
     case RowId::DictionaryFontSize:
@@ -2192,7 +2190,7 @@ const char* EpubReaderTouchMenuActivity::rowValue(const RowId row, char* buffer,
   }
 }
 
-bool EpubReaderTouchMenuActivity::rowIsToggle(const RowId row) const {
+bool EpubReaderTouchMenuActivity::rowIsToggle(const RowId row) {
   switch (row) {
     case RowId::TextAa:
     case RowId::Focus:

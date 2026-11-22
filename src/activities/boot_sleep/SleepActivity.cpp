@@ -351,7 +351,7 @@ class BwFrameKeeper {
   const bool stored;
 };
 
-bool beginOverlayGrayPlane(GfxRenderer& renderer, Bitmap* grayCover, const GfxRenderer::RenderMode plane,
+bool beginOverlayGrayPlane(GfxRenderer& renderer, const Bitmap* grayCover, const GfxRenderer::RenderMode plane,
                            const bool absolute) {
   if (grayCover) {
     if (grayCover->rewindToData() != BmpReaderError::Ok) return false;
@@ -395,7 +395,7 @@ AlphaScanResult scanForUsefulAlpha(HalFile& file, const OverlayBmpInfo& info, ui
 }
 
 AlphaOverlayResult tryRenderTransparentOverlayBmp(HalFile& file, GfxRenderer& renderer, const char* pathForLog,
-                                                  Bitmap* grayCover) {
+                                                  const Bitmap* grayCover) {
   OverlayBmpInfo info;
   if (!parseOverlayBmpHeader(file, info, false)) return AlphaOverlayResult::NotAlphaOverlay;
 
@@ -647,7 +647,7 @@ bool selectRandomSleepFile(const char* firstDirPath, const char* secondDirPath, 
   return true;
 }
 
-void releaseSdFontCachesForDecode(GfxRenderer& renderer) {
+void releaseSdFontCachesForDecode(const GfxRenderer& renderer) {
   if (auto* cache = renderer.getFontCacheManager()) cache->releaseSdFontCaches();
 }
 

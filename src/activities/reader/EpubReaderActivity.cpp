@@ -2509,7 +2509,7 @@ void EpubReaderActivity::showBuildPopup() {
   if (!buildPopupPending || !renderer.hasFrameBuffer()) return;
   GUI.drawPopup(renderer, tr(STR_INDEXING));
   renderer.displayBuffer(HalDisplay::FAST_REFRESH);
-  pagesUntilFullRefresh = 1;
+  formatPagesUntilFullRefresh = 1;
   buildPopupPending = false;
 }
 
@@ -2806,9 +2806,9 @@ void EpubReaderActivity::loop() {
   }
 
   // Paged back into the book: release the end screen app and its theme tokens.
-  if (!atEndOfBook && endOfBookOptions) {
+  if (!atEndOfBook && formatEndOfBookOptions) {
     RenderLock lock(*this);
-    endOfBookOptions.reset();
+    formatEndOfBookOptions.reset();
   }
 
   // The render task is asynchronous. Prepare suggestions before an input can
@@ -2816,14 +2816,14 @@ void EpubReaderActivity::loop() {
   // this UI state only when the end screen is reached.
   if (atEndOfBook) {
     RenderLock lock(*this);
-    if (!endOfBookOptions) {
-      endOfBookOptions = makeUniqueNoThrow<EndOfBookOptions>(renderer);
-      if (!endOfBookOptions) {
+    if (!formatEndOfBookOptions) {
+      formatEndOfBookOptions = makeUniqueNoThrow<EndOfBookOptions>(renderer);
+      if (!formatEndOfBookOptions) {
         LOG_ERR("ERS", "OOM: EndOfBookOptions (%u bytes)", static_cast<unsigned>(sizeof(EndOfBookOptions)));
       }
     }
-    if (endOfBookOptions) {
-      endOfBookOptions->loadOnce(epub->getPath());
+    if (formatEndOfBookOptions) {
+      formatEndOfBookOptions->loadOnce(epub->getPath());
     }
   }
 
@@ -2851,12 +2851,12 @@ void EpubReaderActivity::loop() {
   // The suggestion menu owns Confirm/Back/navigation before automatic page
   // turning and reader shortcuts. This keeps a hold from placing a bookmark
   // or opening dictionary selection behind the menu.
-  const bool endOfBookMenuOpen = atEndOfBook && endOfBookOptions && endOfBookOptions->menuActive();
+  const bool endOfBookMenuOpen = atEndOfBook && formatEndOfBookOptions && formatEndOfBookOptions->menuActive();
   if (endOfBookMenuOpen) {
     longPressMenuHandled = false;
     lastPageTurnTime = millis();
     std::string openPath;
-    switch (endOfBookOptions->handleMenuInput(mappedInput, &openPath)) {
+    switch (formatEndOfBookOptions->handleMenuInput(mappedInput, &openPath)) {
       case EndOfBookOptions::Action::OpenBook:
         activityManager.goToReader(openPath);
         return;
@@ -3162,7 +3162,7 @@ void EpubReaderActivity::loop() {
   // At end of the book with no suggestion menu, forward button goes home and back
   // button returns to last page
   if (currentSpineIndex > 0 && currentSpineIndex >= epub->getSpineItemsCount()) {
-    if (endOfBookOptions && endOfBookOptions->menuActive()) {
+    if (formatEndOfBookOptions && formatEndOfBookOptions->menuActive()) {
       // Selection movement was handled above; absorb leftover page-turn triggers so
       // e.g. "previous" at the top of the list doesn't jump back into the book
       return;
@@ -5447,7 +5447,7 @@ void EpubReaderActivity::requestManualPageTurn(const bool isForwardTurn, const c
 
   // Shortcuts bypass loop()'s ordinary end-screen input handling.
   if (epub && currentSpineIndex > 0 && currentSpineIndex >= epub->getSpineItemsCount()) {
-    if (endOfBookOptions && endOfBookOptions->menuActive()) return;
+    if (formatEndOfBookOptions && formatEndOfBookOptions->menuActive()) return;
     if (isForwardTurn) {
       onGoHome();
     } else {
@@ -5633,7 +5633,7 @@ void EpubReaderActivity::render(RenderLock&& lock) {
   const auto showIndexingPopup = [this]() {
     GUI.drawPopup(renderer, tr(STR_INDEXING));
     renderer.displayBuffer(HalDisplay::FAST_REFRESH);
-    pagesUntilFullRefresh = 1;
+    formatPagesUntilFullRefresh = 1;
   };
 
   bool buildCancelledForBack = false;
@@ -5683,16 +5683,16 @@ void EpubReaderActivity::render(RenderLock&& lock) {
 
   // Show end of book screen
   if (currentSpineIndex == epub->getSpineItemsCount()) {
-    if (!endOfBookOptions) {
-      endOfBookOptions = makeUniqueNoThrow<EndOfBookOptions>(renderer);
-      if (!endOfBookOptions) {
+    if (!formatEndOfBookOptions) {
+      formatEndOfBookOptions = makeUniqueNoThrow<EndOfBookOptions>(renderer);
+      if (!formatEndOfBookOptions) {
         LOG_ERR("ERS", "OOM: EndOfBookOptions (%u bytes)", static_cast<unsigned>(sizeof(EndOfBookOptions)));
       }
     }
     renderer.clearScreen();
-    if (endOfBookOptions) {
-      endOfBookOptions->loadOnce(epub->getPath());
-      endOfBookOptions->render(renderer, mappedInput);
+    if (formatEndOfBookOptions) {
+      formatEndOfBookOptions->loadOnce(epub->getPath());
+      formatEndOfBookOptions->render(renderer, mappedInput);
     }
     renderer.displayBuffer();
     automaticPageTurnActive = false;
@@ -7033,7 +7033,7 @@ bool EpubReaderActivity::renderContents(std::unique_ptr<Page> page, const int fo
   const bool needsAnyGrayscale = needsTextGrayscale || needsImageGrayscale;
   const bool tiledGrayscale = needsAnyGrayscale && renderer.supportsStripGrayscale();
   const bool overlapRefresh =
-      tiledGrayscale && !pageHasImages && pagesUntilFullRefresh > 1 && renderer.supportsAsyncGrayscaleBase();
+      tiledGrayscale && !pageHasImages && formatPagesUntilFullRefresh > 1 && renderer.supportsAsyncGrayscaleBase();
   if (pageHasImages && !deferImageLoading) {
     // Keep the legacy blank/base sequence unless the controller can transition
     // directly to the complete image base.
@@ -7047,7 +7047,7 @@ bool EpubReaderActivity::renderContents(std::unique_ptr<Page> page, const int fo
         renderer.fillRect(imgX + orientedMarginLeft, imgY + orientedMarginTop, imgW, imgH, false);
       }
       if (cleanImageBasePending) {
-        renderer.displayBuffer(pagesUntilFullRefresh < 0 ? manualScreenRefreshMode() : HalDisplay::HALF_REFRESH);
+        renderer.displayBuffer(formatPagesUntilFullRefresh < 0 ? manualScreenRefreshMode() : HalDisplay::HALF_REFRESH);
         cleanImageBasePending = false;
       }
       if (!directImageBase) {
@@ -7062,7 +7062,7 @@ bool EpubReaderActivity::renderContents(std::unique_ptr<Page> page, const int fo
       // Sticky keeps the FAST fallback behavior.
       renderer.displayGrayscaleBase(HalDisplay::FAST_REFRESH);
     } else {
-      renderer.displayBuffer(pagesUntilFullRefresh < 0 ? manualScreenRefreshMode() : HalDisplay::HALF_REFRESH);
+      renderer.displayBuffer(formatPagesUntilFullRefresh < 0 ? manualScreenRefreshMode() : HalDisplay::HALF_REFRESH);
     }
     // The image's own page is handled above and doesn't count toward the full
     // refresh cadence. But the grayscale pass below leaves gray charge in the
@@ -7070,26 +7070,26 @@ bool EpubReaderActivity::renderContents(std::unique_ptr<Page> page, const int fo
     // text there ghosts gray (#2190). Force the next ordinary page onto the
     // HALF ghost-cleanup path, which drives every pixel to its target
     // regardless of residue.
-    pagesUntilFullRefresh = 1;
+    formatPagesUntilFullRefresh = 1;
   } else if (needsAnyGrayscale) {
-    if (pagesUntilFullRefresh <= 1) {
+    if (formatPagesUntilFullRefresh <= 1) {
       // Cleanup turns still need the stronger HALF pass; SDK grayscale
       // overlays settle better if the OEM precondition step runs before the
       // gray planes are written.
-      renderer.displayBuffer(pagesUntilFullRefresh < 0 ? manualScreenRefreshMode() : HalDisplay::HALF_REFRESH);
+      renderer.displayBuffer(formatPagesUntilFullRefresh < 0 ? manualScreenRefreshMode() : HalDisplay::HALF_REFRESH);
       renderer.preconditionGrayscale();
-      pagesUntilFullRefresh = SETTINGS.getRefreshFrequency();
+      formatPagesUntilFullRefresh = SETTINGS.getRefreshFrequency();
     } else if (overlapRefresh) {
-      ReaderUtils::displayWithRefreshCycle(renderer, pagesUntilFullRefresh, /*async=*/true);
+      ReaderUtils::displayWithRefreshCycle(renderer, formatPagesUntilFullRefresh, /*async=*/true);
     } else {
       // Use the grayscale-aware base waveform so the first visible pass is
       // closer to the final anti-aliased result instead of flashing darker
       // text first and softening after the grayscale overlay.
       renderer.displayGrayscaleBase(HalDisplay::FAST_REFRESH);
-      pagesUntilFullRefresh--;
+      formatPagesUntilFullRefresh--;
     }
   } else {
-    ReaderUtils::displayWithRefreshCycle(renderer, pagesUntilFullRefresh);
+    ReaderUtils::displayWithRefreshCycle(renderer, formatPagesUntilFullRefresh);
   }
   if (needsAnyGrayscale) {
     ensureGrayscaleStripScratch();
@@ -8019,7 +8019,8 @@ bool EpubReaderActivity::isAtEndOfBook() const {
   return epub && currentSpineIndex > 0 && currentSpineIndex >= epub->getSpineItemsCount();
 }
 bool EpubReaderActivity::inputOverPage() const {
-  return quickActionsPopup.isActive() || (endOfBookOptions && endOfBookOptions->menuActive()) || activeFootnotePreview;
+  return quickActionsPopup.isActive() || (formatEndOfBookOptions && formatEndOfBookOptions->menuActive()) ||
+         activeFootnotePreview;
 }
 bool EpubReaderActivity::remoteShortcut(const bool readerMenu) {
   if (!epub || inputOverPage()) return false;

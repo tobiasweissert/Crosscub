@@ -49,11 +49,11 @@ Rect band(const GfxRenderer& renderer, const ReaderStatusBarPosition position, c
 }
 
 bool tapped(const GfxRenderer& renderer, const int y, const bool xtc, const bool forceFooter) {
-  for (const auto position : {ReaderStatusBarPosition::Top, ReaderStatusBarPosition::Bottom}) {
+  constexpr std::array positions{ReaderStatusBarPosition::Top, ReaderStatusBarPosition::Bottom};
+  return std::any_of(positions.begin(), positions.end(), [&](const auto position) {
     const auto rect = band(renderer, position, xtc, forceFooter && position == ReaderStatusBarPosition::Bottom);
-    if (rect.height > 0 && y >= rect.y && y < rect.y + rect.height) return true;
-  }
-  return false;
+    return rect.height > 0 && y >= rect.y && y < rect.y + rect.height;
+  });
 }
 
 void draw(const GfxRenderer& renderer, const ReaderStatusBarPosition position, const Values& values, const bool visible,

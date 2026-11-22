@@ -124,6 +124,7 @@ struct Client {
   std::map<std::string, std::string> headers;
   std::string sent;
   int method = 0;
+  size_t openedBodySize = 0;
 };
 using esp_http_client_handle_t = Client*;
 #define ESP_ERR_HTTP_EAGAIN 11
@@ -141,7 +142,10 @@ inline int esp_http_client_set_method(Client* c, int m) {
   c->method = m;
   return 0;
 }
-inline int esp_http_client_open(Client*, size_t) { return 0; }
+inline int esp_http_client_open(Client* c, size_t bodySize) {
+  c->openedBodySize = bodySize;
+  return 0;
+}
 inline int esp_http_client_write(Client* c, const char* b, size_t n) {
   c->sent.append(b, n);
   return static_cast<int>(n);

@@ -18,7 +18,7 @@ class TxtReaderActivity final : public ReaderActivity {
 
   int currentPage = 0;
   int totalPages = 1;
-  int pagesUntilFullRefresh = 0;
+  int formatPagesUntilFullRefresh = 0;
   // Session-only display toggle; cached page layout remains unchanged.
   bool statusBarVisible = true;
   bool sideButtonLongPressHandled = false;
@@ -84,11 +84,11 @@ class TxtReaderActivity final : public ReaderActivity {
       : ReaderActivity("TxtReader", renderer, mappedInput, txt ? txt->getPath() : std::string{},
                        initialRefreshCountdown > 0),
         txt(std::move(txt)),
-        pagesUntilFullRefresh(initialRefreshCountdown),
+        formatPagesUntilFullRefresh(initialRefreshCountdown),
         skipRecentBookUpdateOnEntry(skipRecentBookUpdateOnEntry) {}
   explicit TxtReaderActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, std::string path, bool fast)
       : ReaderActivity("TxtReader", renderer, mappedInput, std::move(path), fast),
-        pagesUntilFullRefresh(fast ? std::max(2, static_cast<int>(SETTINGS.getRefreshFrequency())) : 0),
+        formatPagesUntilFullRefresh(fast ? std::max(2, static_cast<int>(SETTINGS.getRefreshFrequency())) : 0),
         skipRecentBookUpdateOnEntry(fast) {}
   bool handleSideShortcut(uint8_t action) override;
   bool loadBook() override;
@@ -106,7 +106,7 @@ class TxtReaderActivity final : public ReaderActivity {
   bool handleTwoFingerSwipeAction(CrossPointSettings::TWO_FINGER_SWIPE_ACTION action) override;
   bool handleTwoFingerRotation(bool clockwise) override;
   bool prepareManualRefresh() override {
-    pagesUntilFullRefresh = -1;
+    formatPagesUntilFullRefresh = -1;
     return true;
   }
   bool isReaderActivity() const override { return true; }

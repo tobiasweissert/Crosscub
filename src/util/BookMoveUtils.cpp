@@ -9,6 +9,7 @@
 #include <Xtc.h>
 #include <fcntl.h>
 
+#include <algorithm>
 #include <cstring>
 
 #include "BookmarkStore.h"
@@ -24,9 +25,10 @@ constexpr char READ_FOLDER[] = "/Read";
 constexpr char BOOK_MOVE_PENDING[] = "/.crosspoint/book-move.pending";
 
 bool writeMoveIntent(const std::string& from, const std::string& to) {
-  for (const auto* path : {&from, &to})
-    for (const unsigned char c : *path)
-      if (c < 0x20 || c == 0x7f) return false;
+  const auto validPath = [](const std::string& path) {
+    return std::none_of(path.begin(), path.end(), [](const unsigned char c) { return c < 0x20 || c == 0x7f; });
+  };
+  if (!validPath(from) || !validPath(to)) return false;
   const std::string intent = "CPBOOKMOVE1\n" + from + "\n" + to + "\n";
   HalFile marker = Storage.open(BOOK_MOVE_PENDING, O_WRONLY | O_CREAT | O_EXCL);
   if (!marker || marker.write(reinterpret_cast<const uint8_t*>(intent.data()), intent.size()) != intent.size() ||
