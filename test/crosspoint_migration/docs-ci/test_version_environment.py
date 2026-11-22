@@ -15,7 +15,7 @@ VERSION_KEYS = ('CROSSSMUDGE_RELEASE_VERSION', 'CROSSINK_RELEASE_VERSION',
 
 class VersionEnvironment(unittest.TestCase):
     def execute(self, name, values=None):
-        with tempfile.TemporaryDirectory(dir=os.environ['TMPDIR']) as tmp:
+        with tempfile.TemporaryDirectory(dir=tempfile.gettempdir()) as tmp:
             root = Path(tmp)
             (root/'platformio.ini').write_text('[crosssmudge]\nversion = 9.8.7\n[crossink]\nversion = 9.8.7\n')
             class Env(dict):

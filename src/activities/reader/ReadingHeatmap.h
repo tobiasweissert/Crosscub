@@ -1,5 +1,7 @@
 #pragma once
 
+#include <algorithm>
+
 #include "ReadingStatsUtils.h"
 
 // Read-only view of the existing Boolean history. Never implies daily duration.
@@ -10,7 +12,7 @@ struct ReadingHeatmap {
   int32_t gridStart = 0;
   int columns = 0, todayColumn = 0, todayRow = 0;
   unsigned activeDays = 0, knownDays = 0;
-  std::array<Cell, 53 * 7> cells{};
+  std::array<Cell, 14 * 7> cells{};
 
   Cell cell(int column, int row) const {
     return column >= 0 && column < columns && row >= 0 && row < 7 ? cells[column * 7 + row] : Cell::Outside;
@@ -22,12 +24,12 @@ struct ReadingHeatmap {
     if (!today.isValid()) return out;
     out.valid = true;
     out.lastDay = readingStatsDayIndex(today);
-    out.firstDay = out.lastDay >= 364 ? out.lastDay - 364 : 0;
-    // 2000-01-01 was Saturday (Monday = 0).
-    out.gridStart = static_cast<int32_t>(out.firstDay) - (out.firstDay + 5) % 7;
-    out.columns = (static_cast<int32_t>(out.lastDay) - out.gridStart) / 7 + 1;
-    out.todayColumn = out.columns - 1;
+    // Fourteen Monday-first calendar columns, including the current partial week.
     out.todayRow = readingStatsDayOfWeekIndex(today);
+    out.gridStart = static_cast<int32_t>(out.lastDay) - out.todayRow - 13 * 7;
+    out.firstDay = static_cast<uint32_t>(std::max<int32_t>(0, out.gridStart));
+    out.columns = 14;
+    out.todayColumn = 13;
     ReadingStatsDate anchorDate;
     const bool hasHistory = (anchor != 0 || (bits[0] & 1u)) && readingStatsDateFromDayIndex(anchor, anchorDate);
     for (int col = 0; col < out.columns; ++col) {

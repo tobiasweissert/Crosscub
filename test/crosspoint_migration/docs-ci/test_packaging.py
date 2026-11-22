@@ -34,9 +34,9 @@ class Packaging(unittest.TestCase):
         assert spec is not None and spec.loader is not None
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-        with tempfile.TemporaryDirectory(dir=os.environ.get('RUNNER_TEMP') or os.environ['TMPDIR']) as tmp:
+        with tempfile.TemporaryDirectory(dir=os.environ.get('RUNNER_TEMP') or tempfile.gettempdir()) as tmp:
             root = Path(tmp)
-            expected_temp = Path(os.environ.get('RUNNER_TEMP') or os.environ['TMPDIR'])
+            expected_temp = Path(os.environ.get('RUNNER_TEMP') or tempfile.gettempdir())
             self.assertEqual(root.parent.resolve(), expected_temp.resolve())
             (root / 'scripts').symlink_to(ROOT / 'scripts', target_is_directory=True)
             build = root / '.pio/build' / environment
@@ -86,12 +86,12 @@ class Packaging(unittest.TestCase):
         self.run_stage(corrupt=True)
 
     def test_runner_temp_without_host_tmpdir(self):
-        with tempfile.TemporaryDirectory(dir=os.environ['TMPDIR']) as runner_temp:
+        with tempfile.TemporaryDirectory(dir=tempfile.gettempdir()) as runner_temp:
             with patch.dict(os.environ, {'RUNNER_TEMP': runner_temp}, clear=True):
                 self.run_stage()
 
     def test_runner_temp_rejected_image_without_host_tmpdir(self):
-        with tempfile.TemporaryDirectory(dir=os.environ['TMPDIR']) as runner_temp:
+        with tempfile.TemporaryDirectory(dir=tempfile.gettempdir()) as runner_temp:
             with patch.dict(os.environ, {'RUNNER_TEMP': runner_temp}, clear=True):
                 self.run_stage(corrupt=True)
 

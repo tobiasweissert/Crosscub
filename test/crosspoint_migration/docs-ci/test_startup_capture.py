@@ -49,10 +49,11 @@ class CaptureTests(unittest.TestCase):
         escaped = str(self.header).replace(' ', '\\ ')
         self.write(self.dep, '.pio/build/sticky/src/main.cpp.o: src/main.cpp \\\n ' + escaped + '\n')
 
-    def run_capture(self):
+    def run_capture(self, mode=None):
         before = digest_tree(self.project), digest_tree(self.home)
         env = dict(os.environ, HOME=str(self.home), PYTHONDONTWRITEBYTECODE='1')
-        proc = subprocess.run([sys.executable, str(HELPER), '--project', str(self.project), '--env', 'sticky', '--memory-type', 'qio_opi', '--out', str(self.out)],
+        mode = mode or getattr(self, 'capture_mode', '--legacy-dependencies')
+        proc = subprocess.run([sys.executable, str(HELPER), mode, '--project', str(self.project), '--env', 'sticky', '--memory-type', 'qio_opi', '--out', str(self.out)],
                               env=env, capture_output=True, text=True, timeout=10)
         self.assertEqual((digest_tree(self.project), digest_tree(self.home)), before, 'capture mutated source/SDK')
         self.assertNotIn(str(self.base), proc.stdout + proc.stderr)
@@ -67,6 +68,123 @@ class CaptureTests(unittest.TestCase):
         self.assertFalse(self.receipt()['actual_resolved_config_captured'])
         self.assertTrue(self.receipt()['diagnostics'])
         self.assertFalse(self.receipt()['publication_authorized'])
+
+    def producer_fixture(self):
+        self.complete_fixture()
+        self.capture_mode = '--require-producer'
+        self.dep.write_text('.pio/build/sticky/src/main.cpp.o: src/main.cpp\n')
+        proof = '.pio/build/sticky/src/main.cpp.o: src/main.cpp ' + str(self.header).replace(' ', '\\ ') + '\n'
+        self.out.mkdir()
+        (self.out/'producer-main.d').write_text(proof)
+        (self.out/'producer-main.macros').write_bytes(self.header.read_bytes())
+        (self.out/'producer-application-sdkconfig.h').write_bytes(self.header.read_bytes())
+        receipt = {'environment': 'sticky', 'boundary': 'inner-application-main', 'probe_exit': 0,
+                   'compile_argv': ['/fake/g++', '-c', 'src/main.cpp', '-o', '.pio/build/sticky/src/main.cpp.o'],
+                   'producer-main.d_sha256': hashlib.sha256(proof.encode()).hexdigest(),
+                   'producer-main.macros_sha256': hashlib.sha256((self.out/'producer-main.macros').read_bytes()).hexdigest(),
+                   'files': {'producer-application-sdkconfig.h': {'source': str(self.header), 'present': True,
+                       'sha256': hashlib.sha256(self.header.read_bytes()).hexdigest()}}}
+        receipt.update(dependency_exit=0, macro_exit=0, compile_env_sha256=hashlib.sha256(b'{}').hexdigest(),
+                       dependency_argv=['/fake/g++', 'src/main.cpp', '-M', '-MF', str(self.out/'producer-main.d'),
+                                        '-MT', '.pio/build/sticky/src/main.cpp.o'],
+                       probe_argv=['/fake/g++', 'src/main.cpp', '-E', '-dM', '-o', '/dev/fd/8'])
+        data = self.header.read_bytes()
+        receipt['macro_projection'] = dict(raw_bytes=len(data), raw_sha256=hashlib.sha256(data).hexdigest(),
+                                           config_records=data.count(b'\n'), records=data.count(b'\n'))
+        (self.out/'producer-main-receipt.json').write_text(json.dumps(receipt))
+
+    def test_missing_producer_cannot_certify_hosted_capture(self):
+        self.complete_fixture()
+        self.assertEqual(self.run_capture('--require-producer').returncode, 1)
+        self.assertFalse(self.receipt()['actual_resolved_config_captured'])
+        self.out = self.base / 'legacy-output'
+        self.assertEqual(self.run_capture('--legacy-dependencies').returncode, 0)
+
+    def test_producer_success_artifact_size_boundaries(self):
+        for name in ('producer-main.macros', 'producer-main.d'):
+            for size in (262143, 262144, 262145):
+                with self.subTest(name=name, size=size):
+                    self.out = self.base / f'{name}-{size}'
+                    self.producer_fixture()
+                    artifact = self.out / name
+                    original = artifact.read_bytes()
+                    # Pad the last line with harmless whitespace; keep all values intact.
+                    data = original[:-1].ljust(size - 1, b' ') + b'\n'
+                    self.assertEqual(len(data), size)
+                    artifact.write_bytes(data)
+                    path = self.out / 'producer-main-receipt.json'
+                    receipt = json.loads(path.read_text())
+                    digest = hashlib.sha256(data).hexdigest()
+                    receipt[name + '_sha256'] = digest
+                    if name == 'producer-main.macros':
+                        receipt['macro_projection'].update(raw_bytes=size, raw_sha256=digest)
+                    path.write_text(json.dumps(receipt))
+                    if size == 262143:
+                        self.assertEqual(self.run_capture().returncode, 0)
+                        self.assertTrue(self.receipt()['actual_resolved_config_captured'])
+                    else:
+                        self.assert_incomplete()
+
+    def test_projection_attestation_consistency(self):
+        for field in ('raw_bytes', 'raw_sha256', 'records', 'mixed'):
+            with self.subTest(field=field):
+                self.out = self.base / field
+                self.producer_fixture()
+                path = self.out/'producer-main-receipt.json'
+                receipt = json.loads(path.read_text())
+                projection = receipt['macro_projection']
+                if field == 'mixed':
+                    raw = b'#define OTHER 1\n' + self.header.read_bytes()
+                    projection.update(records=projection['records'] + 1, raw_bytes=len(raw),
+                                      raw_sha256=hashlib.sha256(raw).hexdigest())
+                elif field == 'raw_sha256':
+                    projection[field] = '0' * 64
+                else:
+                    projection[field] += 1
+                path.write_text(json.dumps(receipt))
+                if field == 'mixed':
+                    self.assertEqual(self.run_capture().returncode, 0)
+                else:
+                    self.assert_incomplete()
+
+    def test_producer_dependency_closes_observed_mmd_system_header_gap(self):
+        self.producer_fixture()
+        self.assertEqual(self.run_capture().returncode, 0)
+        self.assertTrue(self.receipt()['actual_resolved_config_captured'])
+
+    def test_producer_complete_evidence_required(self):
+        self.producer_fixture()
+        original = self.out
+        import shutil
+        # Preserve the same absolute evidence paths for every independent run.
+        template = self.base / 'template'
+        shutil.copytree(original, template)
+        for change in ({'dependency_exit': None}, {'macro_exit': 1}, {'compile_env_sha256': ''},
+                       {'probe_error': 'OutputLimitExceeded'}, {'macro_projection': {}}, {'probe_argv': []}):
+            with self.subTest(change=change):
+                shutil.rmtree(original)
+                shutil.copytree(template, original)
+                path = original/'producer-main-receipt.json'
+                receipt = json.loads(path.read_text())
+                receipt.update(change)
+                path.write_text(json.dumps(receipt))
+                self.assert_incomplete()
+
+    def test_producer_macro_header_disagreement_fails_closed(self):
+        self.producer_fixture()
+        path = self.out/'producer-main.macros'
+        path.write_text(path.read_text().replace('#define CONFIG_SPIRAM 1', '#define CONFIG_SPIRAM 0'))
+        receipt_path = self.out/'producer-main-receipt.json'
+        receipt = json.loads(receipt_path.read_text())
+        receipt['producer-main.macros_sha256'] = hashlib.sha256(path.read_bytes()).hexdigest()
+        receipt['macro_projection']['raw_sha256'] = receipt['producer-main.macros_sha256']
+        receipt_path.write_text(json.dumps(receipt))
+        self.assert_incomplete()
+
+    def test_producer_wrong_environment_or_tampered_dependency_fails_closed(self):
+        self.producer_fixture()
+        (self.out/'producer-main.d').write_text('tampered\n')
+        self.assert_incomplete()
 
     def test_unsupported_generated_header_cannot_certify(self):
         for index, change in enumerate((
@@ -165,6 +283,111 @@ class CaptureTests(unittest.TestCase):
                 self.assertEqual((self.out / 'startup-main.cpp.d').read_bytes(), self.dep.read_bytes())
                 self.assertEqual((self.out / 'startup-application-sdkconfig.h').read_bytes(), self.header.read_bytes())
 
+    def invisible_fixture(self, **changes):
+        self.complete_fixture()
+        values = load().parse_config((self.libs / 'sdkconfig').read_text())
+        values.update(CONFIG_SPIRAM_BOOT_HW_INIT='y',
+                      CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY='y')
+        values.update(changes)
+        values.pop('CONFIG_SPIRAM_IGNORE_NOTFOUND')
+        for path in (self.project / 'sdkconfig.sticky', self.libs / 'sdkconfig'):
+            path.write_text(''.join(k + '=' + v + '\n' for k, v in values.items()))
+        self.header.write_text(''.join('#define ' + k + ' ' + ('1' if v == 'y' else v) + '\n'
+                                       for k, v in values.items() if v != 'n'))
+        self.kconfig = self.home / '.platformio/packages/framework-espidf/components/esp_psram/Kconfig.spiram.common'
+        self.write(self.kconfig, 'config SPIRAM_IGNORE_NOTFOUND\n'
+                   '    bool "Ignore PSRAM when not found"\n    default "n"\n'
+                   '    depends on SPIRAM_BOOT_HW_INIT && !SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY && !SPIRAM_ALLOW_NOINIT_SEG_EXTERNAL_MEMORY\n'
+                   '    help\n        Normally, if psram initialization is enabled during compile time but not found at runtime, it\n'
+                   '        is seen as an error making the CPU panic.\n')
+
+    def test_source_proven_invisible_ignore_preserves_raw_absence(self):
+        for index, changes in enumerate(({}, {'CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY': 'n',
+                                              'CONFIG_SPIRAM_ALLOW_NOINIT_SEG_EXTERNAL_MEMORY': 'y'},
+                                             {'CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY': 'n',
+                                              'CONFIG_SPIRAM_BOOT_HW_INIT': 'n'})):
+            with self.subTest(index=index):
+                self.invisible_fixture(**changes)
+                self.out = self.base / ('invisible-' + str(index))
+                self.assertEqual(self.run_capture().returncode, 0)
+                receipt = self.receipt()
+                key = 'CONFIG_SPIRAM_IGNORE_NOTFOUND'
+                self.assertEqual(receipt['selected_resolved_values'][key], 'ABSENT_UNRESOLVED')
+                proof = receipt['qualified_dependency_invisible'][key]
+                self.assertEqual(proof['raw_header_state'], 'UNDEFINED')
+                self.assertEqual(proof['raw_config_state'], 'ABSENT_UNRESOLVED')
+                self.assertEqual(proof['source_sha256'], hashlib.sha256(self.kconfig.read_bytes()).hexdigest())
+                self.assertEqual(proof['certainty'], 'source-proven-dependency-inactive')
+                self.assertTrue(proof['false_dependency_terms'])
+                self.assertFalse(receipt['publication_authorized'])
+
+    def test_invisible_ignore_requires_exact_source_and_consistent_absence(self):
+        for case in ('visible', 'missing-source', 'changed-dependency', 'extra-property',
+                     'duplicate-definition', 'header-present', 'unproven-condition',
+                     'contradictory-condition', 'unrelated-absence', 'enabled-ignore'):
+            with self.subTest(case=case):
+                self.invisible_fixture()
+                self.out = self.base / case
+                if case == 'missing-source':
+                    self.kconfig.unlink()
+                elif case == 'changed-dependency':
+                    self.kconfig.write_text(self.kconfig.read_text().replace(' && !SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY', ''))
+                elif case == 'extra-property':
+                    self.kconfig.write_text(self.kconfig.read_text() + '    default y\n')
+                elif case == 'duplicate-definition':
+                    self.kconfig.write_text(self.kconfig.read_text() * 2)
+                elif case == 'header-present':
+                    self.header.write_text(self.header.read_text() + '#define CONFIG_SPIRAM_IGNORE_NOTFOUND 0\n')
+                elif case == 'contradictory-condition':
+                    self.header.write_text(self.header.read_text().replace('#define CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY 1\n', ''))
+                elif case == 'enabled-ignore':
+                    for path in (self.project / 'sdkconfig.sticky', self.libs / 'sdkconfig'):
+                        path.write_text(path.read_text() + 'CONFIG_SPIRAM_IGNORE_NOTFOUND=y\n')
+                    self.header.write_text(self.header.read_text() + '#define CONFIG_SPIRAM_IGNORE_NOTFOUND 1\n')
+                else:
+                    for path in (self.project / 'sdkconfig.sticky', self.libs / 'sdkconfig'):
+                        text = path.read_text()
+                        if case == 'visible':
+                            text = text.replace('CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY=y', 'CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY=n')
+                        elif case == 'unproven-condition':
+                            text = text.replace('CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY=y\n', '')
+                        else:
+                            text = text.replace('CONFIG_SPIRAM_BOOT_INIT=n\n', '')
+                        path.write_text(text)
+                    if case in ('visible', 'unproven-condition'):
+                        self.header.write_text(self.header.read_text().replace('#define CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY 1\n', ''))
+                self.assert_incomplete()
+
+    def test_observed_identifier_alias_and_chain_match_literals(self):
+        for length in (1, 4):
+            with self.subTest(length=length):
+                self.complete_fixture()
+                self.out = self.base / ('alias-' + str(length))
+                first = 'CONFIG_SPIRAM_ALLOW_STACK_EXTERNAL_MEMORY'
+                chain = ['CONFIG_FREERTOS_TASK_CREATE_ALLOW_EXT_MEM'] + ['CONFIG_ALIAS_' + str(i) for i in range(length - 1)]
+                for path in (self.project / 'sdkconfig.sticky', self.libs / 'sdkconfig'):
+                    path.write_text(path.read_text() + first + '=y\n' + ''.join(k + '=y\n' for k in chain))
+                self.header.write_text(self.header.read_text() + ''.join('#define ' + a + ' ' + b + '\n'
+                    for a, b in zip([first] + chain, chain + ['1'])))
+                self.assertEqual(self.run_capture().returncode, 0)
+
+    def test_identifier_alias_undefined_cycles_conflicts_and_depth_fail_closed(self):
+        for case in ('undefined', 'cycle', 'conflict', 'target-raw-conflict', 'expression', 'depth'):
+            with self.subTest(case=case):
+                self.complete_fixture()
+                self.out = self.base / ('bad-alias-' + case)
+                first = 'CONFIG_SPIRAM_ALLOW_STACK_EXTERNAL_MEMORY'
+                for path in (self.project / 'sdkconfig.sticky', self.libs / 'sdkconfig'):
+                    path.write_text(path.read_text() + first + '=y\n' +
+                                    ('CONFIG_ALIAS=n\n' if case == 'target-raw-conflict' else ''))
+                tail = {'undefined': '', 'cycle': '#define CONFIG_ALIAS ' + first + '\n',
+                        'target-raw-conflict': '#define CONFIG_ALIAS 1\n',
+                        'conflict': '#define CONFIG_ALIAS 0\n', 'expression': '#define CONFIG_ALIAS (1)\n',
+                        'depth': ''.join('#define CONFIG_ALIAS' + str(i) + ' CONFIG_ALIAS' + str(i + 1) + '\n' for i in range(70)) + '#define CONFIG_ALIAS70 1\n'}[case]
+                target = 'CONFIG_ALIAS0' if case == 'depth' else 'CONFIG_ALIAS'
+                self.header.write_text(self.header.read_text() + '#define ' + first + ' ' + target + '\n' + tail)
+                self.assert_incomplete()
+
     def test_header_only_flag_is_conflict(self):
         self.complete_fixture()
         with self.header.open('a') as stream:
@@ -224,6 +447,19 @@ class CaptureTests(unittest.TestCase):
         path = self.header.parent / '..' / 'include/sdkconfig.h'
         self.write(self.dep, '.pio/build/sticky/src/main.cpp.o: ' + str(path).replace(' ', '\\ ') + '\n')
         self.assert_incomplete()
+
+    def test_ci44834357235_missing_header_in_retained_main_closure_is_explicit(self):
+        # Authenticated CI44834357235 main.cpp.d contains SDK FreeRTOS headers,
+        # but no sdkconfig.h prerequisite. Root paths alone cannot select a
+        # memory variant; the matching board/config candidate is not authority.
+        self.complete_fixture()
+        prerequisite = self.libs / 'include/freertos/config/include/freertos/FreeRTOSConfig.h'
+        self.write(self.dep, '.pio/build/sticky/src/main.cpp.o: src/main.cpp \\\n ' +
+                   str(prerequisite).replace(' ', '\\ ') + '\n')
+        self.assert_incomplete()
+        self.assertEqual(self.receipt().get('configuration_error'), 'dependency-header-missing')
+        self.assertEqual((self.out / 'startup-main.cpp.d').read_bytes(), self.dep.read_bytes())
+        self.assertFalse((self.out / 'startup-application-sdkconfig.h').exists())
 
     def test_missing_dependency_never_uses_board_candidate(self):
         self.complete_fixture()
@@ -410,6 +646,17 @@ def load():
 
 
 class StartupParserTests(unittest.TestCase):
+    def test_identifier_alias_exact_depth_boundary(self):
+        module = load()
+        for edges in (32, 33):
+            definitions = {'CONFIG_ALIAS' + str(i): 'CONFIG_ALIAS' + str(i + 1) for i in range(edges)}
+            definitions['CONFIG_ALIAS' + str(edges)] = '1'
+            if edges == 32:
+                self.assertEqual(module.resolve_header_value(definitions, 'CONFIG_ALIAS0'), '1')
+            else:
+                with self.assertRaises(ValueError):
+                    module.resolve_header_value(definitions, 'CONFIG_ALIAS0')
+
     def test_config_disabled_numeric_and_unknown(self):
         module = load()
         self.assertIsNotNone(module, 'capture helper missing')

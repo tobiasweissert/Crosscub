@@ -6,7 +6,7 @@ R=Path(__file__).resolve().parents[2]
 p=argparse.ArgumentParser();p.add_argument('--sanitize',action='store_true');a=p.parse_args()
 with tempfile.TemporaryDirectory(prefix='reading-heatmap-',dir=os.environ.get('TMPDIR','/root/.hermes/cache/scratch')) as d:
  d=Path(d)
- (d/'HalClock.h').write_text('#pragma once\n#include <cstdint>\nstruct Clock { bool getDateTime(uint16_t&,uint8_t&,uint8_t&,uint8_t&,uint8_t&){return false;} }; inline Clock halClock;\n')
+ (d/'HalClock.h').write_text('#pragma once\n#include <cstdint>\nstruct Clock { bool available=false; uint16_t year=2024; uint8_t month=2,day=25,hour=23,minute=50; bool getDateTime(uint16_t& y,uint8_t& m,uint8_t& d,uint8_t& h,uint8_t& n){y=year;m=month;d=day;h=hour;n=minute;return available;} }; inline Clock halClock;\n')
  (d/'CrossPointSettings.h').write_text('#pragma once\nstruct Settings { int clockUtcOffsetQ=48; }; inline Settings SETTINGS;\n')
  source=r'''
 #include <cassert>
@@ -14,17 +14,19 @@ with tempfile.TemporaryDirectory(prefix='reading-heatmap-',dir=os.environ.get('T
 #include <cstdint>
 #include <initializer_list>
 #include "ReadingHeatmap.h"
+#include "HalClock.h"
+#include "CrossPointSettings.h"
 int main(){
  std::array<uint8_t,READING_HISTORY_BYTES> bits{};
  const ReadingStatsDate today{2024,3,1}; auto day=readingStatsDayIndex(today);
  markReadingHistoryDay(day,bits,day); markReadingHistoryDay(day,bits,day-1);
  auto m=ReadingHeatmap::build(today,day,bits);
- assert(m.valid && m.lastDay==day && m.firstDay==day-364 && m.activeDays==2);
+ assert(m.valid && m.lastDay==day && m.firstDay==day-95 && m.activeDays==2);
  assert(m.cell(m.todayColumn,m.todayRow)==ReadingHeatmap::Cell::Active);
  assert(m.todayRow==4); // Friday, Monday-first
  assert(m.cell(m.todayColumn,5)==ReadingHeatmap::Cell::Outside);
- assert(m.columns==53 && m.cell(0,0)==ReadingHeatmap::Cell::Outside);
- puts("PASS leap-day, 365-day period, Monday alignment, future padding");
+ assert(m.columns==14 && m.cell(0,0)!=ReadingHeatmap::Cell::Outside);
+ puts("PASS leap-day, 14-week period, Monday alignment, future padding");
  const auto before=bits;
  // Production uses anchor zero AND bit zero clear as its empty-history sentinel.
  std::array<uint8_t,READING_HISTORY_BYTES> emptyBits{};
@@ -38,12 +40,12 @@ int main(){
  auto epoch=ReadingHeatmap::build({2000,1,1},epochAnchor,epochBits);
  assert(epoch.valid && epoch.activeDays==1 && epoch.knownDays==1);
  assert(epoch.cell(epoch.todayColumn,epoch.todayRow)==ReadingHeatmap::Cell::Active);
- assert(epoch.cell(0,4)==ReadingHeatmap::Cell::Outside && epoch.cell(0,6)==ReadingHeatmap::Cell::Outside);
+ assert(epoch.cell(13,4)==ReadingHeatmap::Cell::Outside && epoch.cell(13,6)==ReadingHeatmap::Cell::Outside);
  auto epochNext=ReadingHeatmap::build({2000,1,2},epochAnchor,epochBits);
  assert(epochNext.activeDays==1 && epochNext.knownDays==2);
  assert(epochNext.cell(epochNext.todayColumn,epochNext.todayRow)==ReadingHeatmap::Cell::Inactive);
  auto epochStale=ReadingHeatmap::build(today,epochAnchor,epochBits);
- assert(epochStale.activeDays==0 && epochStale.knownDays==365);
+ assert(epochStale.activeDays==0 && epochStale.knownDays==96);
  auto invalidAnchor=ReadingHeatmap::build(today,UINT32_MAX,epochBits);
  assert(invalidAnchor.activeDays==0 && invalidAnchor.knownDays==0);
  assert(epochAnchor==0 && epochBits==epochBefore);
@@ -51,12 +53,24 @@ int main(){
  auto invalid=ReadingHeatmap::build({},day,bits);assert(!invalid.valid);
  auto expired=ReadingHeatmap::build(today,day+730,bits);assert(expired.knownDays==0);
  auto boundary=ReadingHeatmap::build(today,day+729,bits);assert(boundary.knownDays==1);
- auto stale=ReadingHeatmap::build(today,day-1000,bits);assert(stale.knownDays==365 && stale.activeDays==0);
+ auto stale=ReadingHeatmap::build(today,day-1000,bits);assert(stale.knownDays==96 && stale.activeDays==0);
  assert(bits==before);
  for(unsigned n=0;n<365;++n)markReadingHistoryDay(day,bits,day-n);
- auto full=ReadingHeatmap::build(today,day,bits);assert(full.activeDays==365);
+ auto full=ReadingHeatmap::build(today,day,bits);assert(full.activeDays==96);
  assert(full.cell(-1,0)==ReadingHeatmap::Cell::Outside && full.cell(0,7)==ReadingHeatmap::Cell::Outside);
  puts("PASS empty/invalid clock, retention boundary, stale anchor, read-only history, full period");
+ static_assert(READING_HISTORY_DAYS==730);
+ for(unsigned n=0;n<730;++n)markReadingHistoryDay(day,bits,day-n);
+ const auto retained=bits;auto retainedGrid=ReadingHeatmap::build(today,day,bits);
+ assert(retainedGrid.activeDays==96 && bits==retained && (bits[729/8]&(1u<<(729%8))));
+ ReadingStatsDateTime local;halClock.available=true;SETTINGS.clockUtcOffsetQ=52;
+ assert(getCurrentLocalReadingStatsDateTime(local) && local.date.day==26 && local.hour==0);
+ auto monday=ReadingHeatmap::build(local.date,day,bits);assert(monday.todayRow==0 && monday.lastDay-monday.firstDay==91);
+ SETTINGS.clockUtcOffsetQ=44;halClock.day=26;halClock.hour=0;halClock.minute=10;
+ assert(getCurrentLocalReadingStatsDateTime(local) && local.date.day==25 && local.hour==23);
+ auto sunday=ReadingHeatmap::build(local.date,day,bits);assert(sunday.todayRow==6 && sunday.lastDay-sunday.firstDay==97);
+ halClock.available=false;assert(!getCurrentLocalReadingStatsDateTime(local) && !ReadingHeatmap::build(local.date,day,bits).valid);
+ puts("PASS local timezone Sunday/Monday week boundary, no RTC, unchanged 730-day retention");
  /*CALENDAR_ORACLE*/
 }
 '''
@@ -75,12 +89,12 @@ int main(){
   ReadingStatsDate date{static_cast<uint16_t>(c.year),static_cast<uint8_t>(c.month),static_cast<uint8_t>(c.day)};
   assert(readingStatsDayIndex(date)==static_cast<unsigned>(c.index));
   auto grid=ReadingHeatmap::build(date,c.index,bits);
-  assert(grid.valid && grid.todayRow==c.weekday && grid.columns<=53);
+  assert(grid.valid && grid.todayRow==c.weekday && grid.columns==14);
   unsigned inside=0;
   for(int col=0;col<grid.columns;++col)for(int row=0;row<7;++row){
    if(grid.cell(col,row)!=ReadingHeatmap::Cell::Outside){++inside;auto index=grid.gridStart+col*7+row;assert(index>=static_cast<int>(grid.firstDay)&&index<=c.index);}
   }
-  assert(inside==static_cast<unsigned>(std::min(c.index+1,365)));
+  assert(inside==static_cast<unsigned>(std::min(c.index+1,92+c.weekday)));
  }
  puts("PASS Gregorian oracle: 425 boundary/leap cases across 2000-2099");
  ''')
@@ -122,7 +136,9 @@ struct MappedInputManager {
 /*REAL_RELEASE_GUARD*/
 struct TouchHeaderBackButton {static int compactHeaderRect(GfxRenderer&){return 0;}static bool wasTapped(MappedInputManager& i,int){return i.header;}};
 namespace BookStatsTouchTarget {constexpr int PageIndicatorBase=100,DateFieldBase=10,DateFieldCount=6,DateAdjustUp=20,DateAdjustDown=21,DateSave=22,DateCancel=23,StartedDaysStat=1;}
+struct RecentReadingStats {int loaded=0; static RecentReadingStats load(const std::string& = "", const StatsDouble* = nullptr){return {1};}};
 struct Harness : Activity {
+ RecentReadingStats recentReadingStats;
 '''+enum+r'''
  Page page=INITIAL_PAGE;MappedInputManager mappedInput;GfxRenderer renderer;int updates=0,exits=0,edits=0,selectedEditField=0;
  std::string bookCachePath="/SAMPLE/cache";GfxRenderer::Orientation previousOrientation=GfxRenderer::Orientation::Portrait;
@@ -145,7 +161,7 @@ struct Harness : Activity {
  harness+=r'''
 };
 int main(){
- Harness initial;initial.onEnter();assert(initial.page==Harness::Page::Heatmap);
+ Harness initial;initial.onEnter();assert(initial.page==Harness::Page::Heatmap && initial.recentReadingStats.loaded==1);
  Harness noBook;noBook.bookCachePath.clear();noBook.onEnter();assert(noBook.page==Harness::Page::Heatmap);
  for(bool aggregate:{false,true}){
  Harness h;h.showAllDevicesStats=aggregate;
@@ -234,6 +250,10 @@ int main(){
  subprocess.run([str(d/'activity')],check=True)
 
 import sys
+subprocess.run([sys.executable,str(Path(__file__).with_name('codec_probe.py'))]+(['--sanitize'] if a.sanitize else []),check=True)
+subprocess.run([sys.executable,str(Path(__file__).with_name('recent_probe.py'))]+(['--sanitize'] if a.sanitize else []),check=True)
+subprocess.run([sys.executable,str(Path(__file__).with_name('store_probe.py'))]+(['--sanitize'] if a.sanitize else []),check=True)
+subprocess.run([sys.executable,str(Path(__file__).with_name('icon_probe.py'))]+(['--sanitize'] if a.sanitize else []),check=True)
 subprocess.run([sys.executable,str(Path(__file__).with_name('render_probe.py'))]+(['--sanitize'] if a.sanitize else []),check=True)
 
 # Optional full production input path, using an already-built hash-bound launch fixture.

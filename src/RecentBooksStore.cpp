@@ -210,39 +210,64 @@ bool RecentBooksStore::loadFromFile() {
   return false;
 }
 
-bool RecentBooksStore::loadFromBinaryFile() {
+std::vector<RecentBook> RecentBooksStore::readOnlySnapshot() const {
+  if (loadAttempted_) return recentBooks;
+  RecentBooksStore snapshot;
+  JsonDocument doc;
+  if (PersistableStoreBase::readDocFromFile(getFilePath(), doc)) {
+    snapshot.fromJson(doc.as<JsonVariantConst>());
+  } else if (!Storage.exists(getFilePath())) {
+    // Do not mark the singleton loaded: Home/reader still own normal migration.
+    if (!snapshot.loadFromBinaryFile(true)) return {};
+  }
+  return snapshot.recentBooks;
+}
+
+bool RecentBooksStore::loadFromBinaryFile(const bool readOnly) {
   HalFile inputFile;
   if (!Storage.openFileForRead("RBS", RECENT_BOOKS_FILE_BIN, inputFile)) {
     return false;
   }
 
-  uint8_t version;
-  serialization::readPod(inputFile, version);
+  auto readPod = [&](uint8_t& value) {
+    if (readOnly) return serialization::tryReadPod(inputFile, value);
+    serialization::readPod(inputFile, value);
+    return true;
+  };
+  auto readString = [&](std::string& value) {
+    if (readOnly) return serialization::tryReadString(inputFile, value, 4096);
+    serialization::readString(inputFile, value);
+    return true;
+  };
+  uint8_t version = 0;
+  if (!readPod(version)) return false;
   if (version == 1 || version == 2) {
     // Old version, just read paths
-    uint8_t count;
-    serialization::readPod(inputFile, count);
+    uint8_t count = 0;
+    if (!readPod(count)) return false;
+    if (readOnly) count = std::min(count, static_cast<uint8_t>(MAX_RECENT_BOOKS));
     recentBooks.clear();
     recentBooks.reserve(count);
     for (uint8_t i = 0; i < count; i++) {
       std::string path;
-      serialization::readString(inputFile, path);
+      if (!readString(path)) return false;
 
       // load book to get missing data
-      RecentBook book = getDataFromBook(path);
+      RecentBook book = readOnly ? RecentBook{path, "", "", ""} : getDataFromBook(path);
+      if (readOnly && version == 1) book.title = path.substr(path.find_last_of('/') + 1);
       if (book.title.empty() && book.author.empty() && version == 2) {
         // Fall back to loading what we can from the store
         std::string title, author;
-        serialization::readString(inputFile, title);
-        serialization::readString(inputFile, author);
+        if (!readString(title) || !readString(author)) return false;
         recentBooks.push_back({path, title, author, ""});
       } else {
         recentBooks.push_back(book);
       }
     }
   } else if (version == RECENT_BOOKS_FILE_VERSION) {
-    uint8_t count;
-    serialization::readPod(inputFile, count);
+    uint8_t count = 0;
+    if (!readPod(count)) return false;
+    if (readOnly) count = std::min(count, static_cast<uint8_t>(MAX_RECENT_BOOKS));
 
     recentBooks.clear();
     recentBooks.reserve(count);
@@ -250,10 +275,8 @@ bool RecentBooksStore::loadFromBinaryFile() {
 
     for (uint8_t i = 0; i < count; i++) {
       std::string path, title, author, coverBmpPath;
-      serialization::readString(inputFile, path);
-      serialization::readString(inputFile, title);
-      serialization::readString(inputFile, author);
-      serialization::readString(inputFile, coverBmpPath);
+      if (!readString(path)) return false;
+      if (!readString(title) || !readString(author) || !readString(coverBmpPath)) return false;
 
       // Omit books with missing title (e.g. saved before metadata was available)
       if (title.empty()) {

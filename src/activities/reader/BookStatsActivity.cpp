@@ -202,7 +202,7 @@ void BookStatsActivity::clearEditedDate(const bool finishedField) {
 }
 
 bool BookStatsActivity::shouldClearDateOnAdjust(const ReadingStatsDate& date, const bool finishedField,
-                                                const int fieldIndex, const int delta) const {
+                                                const int fieldIndex, const int delta) {
   if (!date.isValid()) {
     return false;
   }
@@ -291,6 +291,7 @@ void BookStatsActivity::adjustSelectedDateField(const int delta) {
 
 void BookStatsActivity::onEnter() {
   Activity::onEnter();
+  recentReadingStats = RecentReadingStats::load(bookCachePath, &stats);
   ignoreInitialBackRelease = mappedInput.isPressed(MappedInputManager::Button::Back);
   ignoreInitialConfirmRelease = mappedInput.isPressed(MappedInputManager::Button::Confirm);
   ignoreInitialPowerRelease = mappedInput.isPressed(MappedInputManager::Button::Power);
@@ -542,7 +543,7 @@ void BookStatsActivity::render(RenderLock&&) {
                             showAllDevicesStats);
       break;
     case Page::Heatmap:
-      renderReadingHeatmapPage(renderer, &mappedInput, globalStats, true);
+      renderReadingHeatmapPage(renderer, &mappedInput, globalStats, true, recentReadingStats);
       break;
     case Page::AllDevices:
       renderGlobalStatsPage(renderer, &mappedInput, tr(STR_STATS_ALL_DEVICES_SCREEN), allDevicesStats, true, false);

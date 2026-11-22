@@ -4,6 +4,7 @@
 
 #include "BookReadingStats.h"
 #include "GlobalReadingStats.h"
+#include "RecentReadingStats.h"
 
 class GfxRenderer;
 class MappedInputManager;
@@ -27,7 +28,8 @@ void renderPerBookStatsPage(GfxRenderer& renderer, const MappedInputManager* map
                             bool showMoreButton);
 
 void renderReadingHeatmapPage(GfxRenderer& renderer, const MappedInputManager* mappedInput,
-                              const GlobalReadingStats& stats, bool showMoreButton);
+                              const GlobalReadingStats& stats, bool showMoreButton,
+                              const RecentReadingStats& recent = {});
 
 void renderGlobalStatsPage(GfxRenderer& renderer, const MappedInputManager* mappedInput, const char* screenTitle,
                            const GlobalReadingStats& stats, bool showButtonHints, bool showMoreButton);

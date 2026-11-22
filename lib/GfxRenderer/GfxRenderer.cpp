@@ -1826,6 +1826,23 @@ void GfxRenderer::drawIcon(const uint8_t bitmap[], const int x, const int y, con
 void GfxRenderer::drawIcon(const uint8_t bitmap[], const int x, const int y, const int width, const int height) const {
   if (fontCacheManager_ && fontCacheManager_->isScanning()) return;
 
+  if (width <= 0 || height <= 0) return;
+  if (orientation != Portrait || _stripActive || textClipActive_ || clipLeft_ != 0 || clipTop_ != 0 ||
+      clipRight_ != 32767 || clipBottom_ != 32767) {
+    // Assets are packed in Portrait panel order: rows run backwards along
+    // logical x, and bits run forwards along logical y. Let drawPixel own
+    // orientation, clipping and the active render target; source white is transparent.
+    const int stride = (height + 7) / 8;
+    for (int row = 0; row < width; ++row) {
+      for (int col = 0; col < height; ++col) {
+        if (!(bitmap[row * stride + col / 8] & (0x80 >> (col % 8)))) {
+          drawPixel(x + width - 1 - row, y + col, true);
+        }
+      }
+    }
+    return;
+  }
+
   // Portrait-mode coordinate transform (x<->y swap). Draw black source pixels
   // transparently while preserving sub-byte x offsets; EInkDisplay's transparent
   // blit is byte-aligned, which can visually shift icons when y is not /8.
@@ -3227,6 +3244,22 @@ void GfxRenderer::drawIconInverted(const uint8_t bitmap[], const int x, const in
 void GfxRenderer::drawIconInverted(const uint8_t bitmap[], const int x, const int y, const int width,
                                    const int height) const {
   if (fontCacheManager_ && fontCacheManager_->isScanning()) return;
+
+  if (width <= 0 || height <= 0) return;
+  if (orientation != Portrait || _stripActive || textClipActive_ || clipLeft_ != 0 || clipTop_ != 0 ||
+      clipRight_ != 32767 || clipBottom_ != 32767) {
+    // Same Portrait-packed source as drawIcon; only black source pixels
+    // become white destination pixels. White source pixels stay transparent.
+    const int stride = (height + 7) / 8;
+    for (int row = 0; row < width; ++row) {
+      for (int col = 0; col < height; ++col) {
+        if (!(bitmap[row * stride + col / 8] & (0x80 >> (col % 8)))) {
+          drawPixel(x + width - 1 - row, y + col, false);
+        }
+      }
+    }
+    return;
+  }
 
   // Portrait-mode coordinate transform (x<->y swap), matching drawIcon.
   // OR with ~srcByte sets framebuffer bits to 1 (white) wherever the icon

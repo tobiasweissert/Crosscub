@@ -102,8 +102,43 @@ jobs:
               assert '6.1.19' in subprocess.check_output([exe, '--version'], text=True)
           PY
 
+      - name: Require recipient-encrypted analyzer retention
+        id: recipient
+        env:
+          RECIPIENT_CERT: ${{ vars.CROSSCUB_ARTIFACT_RECIPIENT_CERT }}
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s\n' "$RECIPIENT_CERT" > "$RUNNER_TEMP/crosscub-recipient.pem"
+          python3 scripts/seal_ci_artifacts.py validate-cert --cert "$RUNNER_TEMP/crosscub-recipient.pem"
+
       - name: Run cppcheck
-        run: pio check --verbose --fail-on-defect low --fail-on-defect medium --fail-on-defect high
+        id: analyzer
+        run: |
+          set -euo pipefail
+          umask 077
+          export CROSSCUB_PRIVATE_EVIDENCE="$GITHUB_WORKSPACE/cppcheck-evidence"
+          mkdir -p "$CROSSCUB_PRIVATE_EVIDENCE"
+          python3 scripts/ci_cppcheck_capture.py check --verbose --fail-on-defect low --fail-on-defect medium --fail-on-defect high > cppcheck-evidence/check.log 2>&1
+
+      - name: Seal analyzer failure diagnostics
+        if: always() && steps.recipient.outcome == 'success' && steps.analyzer.outcome != 'skipped'
+        id: seal
+        run: |
+          set -euo pipefail
+          python3 scripts/seal_ci_artifacts.py seal --evidence cppcheck-evidence --cert "$RUNNER_TEMP/crosscub-recipient.pem" --output cppcheck-sealed
+
+      - name: Retain encrypted analyzer diagnostics
+        if: always() && steps.seal.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          name: crosscub-cppcheck-sealed-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            cppcheck-sealed/sealed.envelope
+            cppcheck-sealed/receipt.json
+          if-no-files-found: error
+          retention-days: 31
+          compression-level: 0
 
   build:
     # Standard Sticky uses approved packing; the manual compatibility alias is equivalent.
@@ -180,7 +215,7 @@ jobs:
           python3 scripts/seal_ci_artifacts.py validate-cert --cert "$RUNNER_TEMP/crosscub-recipient.pem"
 
       - name: Test authenticated artifact sealing
-        run: python3 -m unittest discover -s test/crosspoint_migration/ci-sealed-artifacts -v
+        run: python3 -m unittest discover -s test/ota_release -p test_artifact_privacy.py -v
 
       - name: Record approved source before build
         run: |
@@ -206,7 +241,12 @@ jobs:
         run: |
           set -euo pipefail
           # Raw diagnostics (including runner paths) stay inside the sealed evidence.
-          pio run --verbose -j1 -e "$PIO_ENV" > "pio-$PIO_ENV.log" 2>&1
+          umask 077
+          export CROSSCUB_PRIVATE_EVIDENCE="$GITHUB_WORKSPACE/sticky-evidence"
+          export CROSSCUB_PROJECT_SCRIPTS="$GITHUB_WORKSPACE/scripts"
+          : > "pio-$PIO_ENV.log"
+          python3 scripts/ci_producer_capture.py --producer "$HOME/.platformio/platforms/espressif32/builder/frameworks/espidf.py" > "pio-$PIO_ENV.log" 2>&1
+          pio run --verbose -j1 -e "$PIO_ENV" >> "pio-$PIO_ENV.log" 2>&1
 
       - name: Stage exact Sticky BIN ELF and provenance
         if: always() && steps.firmware.outcome != 'skipped'
@@ -223,7 +263,7 @@ jobs:
           done
           trap 'test -f sticky-evidence/image-validation.json || printf "{\"valid\":false,\"error\":\"provenance collection failed\",\"publication_authorized\":false}\\n" > sticky-evidence/image-validation.json' EXIT
           startup_capture_status=0
-          python3 scripts/capture_sticky_startup_config.py \
+          python3 scripts/capture_sticky_startup_config.py --require-producer \
             --project . --env "$PIO_ENV" --memory-type qio_opi \
             --out sticky-evidence || startup_capture_status=$?
           git diff --binary HEAD > sticky-evidence/source-after-build.patch
@@ -392,26 +432,43 @@ jobs:
 
       - name: Extract firmware stats
         run: |
-          set -euo pipefail
-          {
-            echo "## $PIO_ENV firmware build stats"
-            grep -E "RAM:\s|Flash:\s" "pio-$PIO_ENV.log" | while read -r line; do echo "- ${line}"; done
-          } >> "$GITHUB_STEP_SUMMARY"
+          echo 'Firmware size diagnostics remain private.' >> "$GITHUB_STEP_SUMMARY"
 
-  # This job is used as the PR required actions check, allows for changes to other steps in the future without breaking
-  # PR requirements.
-  test-status:
-    name: Test Status
-    needs:
-      - build
-      - clang-format
-      - cppcheck
-    if: always()
+  required-tests:
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     steps:
-      - name: Fail because needed jobs failed
-        # Fail if any job failed or was cancelled (skipped jobs are ok)
-        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
-        run: exit 1
-      - name: Success
-        run: exit 0
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Check preview version, packing, Stats layout and status policy
+        run: |
+          set -eu
+          export TMPDIR="$RUNNER_TEMP"
+          python3 test/static_builtin_data/test_integration_policy.py IntegrationPolicy.test_production_packing_sdk_delta_and_raw_controls
+          python3 test/reading_heatmap/render_probe.py
+          python3 test/reading_heatmap/render_probe.py --sanitize
+          python3 test/crosspoint_migration/docs-ci/test_preview_status.py
+
+  test-status:
+    name: Test Status
+    if: always()
+    needs: [build, clang-format, cppcheck, required-tests]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require exact mandatory job results
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          BUILD: ${{ needs.build.result }}
+          FORMAT: ${{ needs.clang-format.result }}
+          ANALYZER: ${{ needs.cppcheck.result }}
+          TESTS: ${{ needs.required-tests.result }}
+        run: |
+          set -eu
+          test "$FORMAT:$ANALYZER" = success:success
+          case "$EVENT" in
+            push) test "$REF:$BUILD:$TESTS" = refs/heads/main:skipped:skipped ;;
+            workflow_dispatch|pull_request|workflow_call) test "$BUILD:$TESTS" = success:success ;;
+            *) exit 1 ;;
+          esac

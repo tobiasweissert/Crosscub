@@ -24,7 +24,10 @@ struct BookReadingStats {
   // Loads stats from cachePath/stats_v5.bin, with fallback reads from the
   // previous versioned filename and legacy cachePath/stats.bin. Returns
   // default-constructed stats if no compatible file exists.
-  static BookReadingStats load(const std::string& cachePath);
+  enum class LoadMode { Recover, ReadOnly };
+  // ReadOnly shares the decoder but never repairs transaction artifacts. An
+  // unreadable canonical with retained recovery roots is unavailable to views.
+  static BookReadingStats load(const std::string& cachePath, LoadMode mode = LoadMode::Recover);
 
   // Saves stats to cachePath/stats_v5.bin through recoverable .tmp/.bak files.
   bool save(const std::string& cachePath) const;

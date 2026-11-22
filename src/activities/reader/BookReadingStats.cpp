@@ -105,9 +105,15 @@ bool openRecoverableStatsFile(const std::string& path, HalFile& f) {
   return false;
 }
 
-bool openStatsFileForRead(const std::string& cachePath, HalFile& f) {
+bool openStatsFileForRead(const std::string& cachePath, HalFile& f, const BookReadingStats::LoadMode mode) {
   const std::string currentName = statsFileNameForVersion(STATS_FILE_VERSION);
-  if (openRecoverableStatsFile(cachePath + "/" + currentName, f)) {
+  const std::string currentPath = cachePath + "/" + currentName;
+  if (mode == BookReadingStats::LoadMode::ReadOnly) {
+    if (Storage.openFileForRead("STATS", currentPath, f)) return true;
+    if (Storage.exists((currentPath + ".tmp").c_str()) || Storage.exists((currentPath + ".bak").c_str())) {
+      return false;
+    }
+  } else if (openRecoverableStatsFile(currentPath, f)) {
     return true;
   }
 
@@ -168,10 +174,10 @@ ReadingStatsDate readDate(const uint8_t* data, const int offset) {
 
 }  // namespace
 
-BookReadingStats BookReadingStats::load(const std::string& cachePath) {
+BookReadingStats BookReadingStats::load(const std::string& cachePath, const LoadMode mode) {
   BookReadingStats stats;
   HalFile f;
-  if (!openStatsFileForRead(cachePath, f)) {
+  if (!openStatsFileForRead(cachePath, f, mode)) {
     return stats;
   }
   uint8_t data[STATS_FILE_SIZE] = {};

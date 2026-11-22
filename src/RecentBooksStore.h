@@ -26,7 +26,7 @@ class RecentBooksStore : public PersistableStore<RecentBooksStore> {
 
   RecentBooksStore() = default;
   ~RecentBooksStore() = default;
-  bool loadFromBinaryFile();
+  bool loadFromBinaryFile(bool readOnly = false);
 
   friend class PersistableStore<RecentBooksStore>;
 
@@ -72,6 +72,10 @@ class RecentBooksStore : public PersistableStore<RecentBooksStore> {
     ensureLoaded();
     return recentBooks;
   }
+
+  // Copy current metadata without initializing/migrating the singleton. Cold
+  // snapshots use this store's JSON/binary decoders, never book constructors.
+  std::vector<RecentBook> readOnlySnapshot() const;
 
   // Get the count of recent books
   int getCount() const {

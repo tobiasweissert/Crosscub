@@ -5,6 +5,12 @@ Import("env")
 
 
 PROJECT_DIR = Path(env.subst("$PROJECT_DIR"))
+
+# Opt-in hosted evidence only; preserve the default build/packing script list.
+import os
+if os.environ.get('CROSSCUB_PRIVATE_EVIDENCE'):
+    import runpy
+    runpy.run_path(str(PROJECT_DIR / 'scripts/ci_producer_capture.py'))['install'](env)
 MARKER = "/* CrossPoint wolfSSL compatibility overrides */"
 OVERRIDES = f"""
 

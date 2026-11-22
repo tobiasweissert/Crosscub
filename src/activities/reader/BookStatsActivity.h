@@ -7,6 +7,7 @@
 #include "../Activity.h"
 #include "BookReadingStats.h"
 #include "GlobalReadingStats.h"
+#include "RecentReadingStats.h"
 
 class BookStatsActivity final : public Activity {
   enum class Page : uint8_t { Heatmap, PerBook, ThisDevice, AllDevices, EditDates };
@@ -16,6 +17,7 @@ class BookStatsActivity final : public Activity {
   BookReadingStats stats;
   GlobalReadingStats globalStats;
   GlobalReadingStats allDevicesStats;
+  RecentReadingStats recentReadingStats;
   bool showAllDevicesStats = false;
   bool returnToHomeOnExit = false;
   float progressPercent = -1.0f;
@@ -34,7 +36,7 @@ class BookStatsActivity final : public Activity {
   bool ignoreInitialPowerRelease = false;
 
   bool hasEditableBook() const { return !bookCachePath.empty() && halClock.isAvailable(); }
-  bool usesNoRtcSingleScreenLayout() const { return !halClock.isAvailable(); }
+  static bool usesNoRtcSingleScreenLayout() { return !halClock.isAvailable(); }
   void refreshAllDevicesStats();
   void saveStats();
   void beginDateEditing();
@@ -44,7 +46,7 @@ class BookStatsActivity final : public Activity {
   void applyCompletedState(bool completed);
   ReadingStatsDate defaultDateForField(bool finishedField) const;
   void clearEditedDate(bool finishedField);
-  bool shouldClearDateOnAdjust(const ReadingStatsDate& date, bool finishedField, int fieldIndex, int delta) const;
+  static bool shouldClearDateOnAdjust(const ReadingStatsDate& date, bool finishedField, int fieldIndex, int delta);
   void normalizeEditedDates(const bool editedFinishedField);
   void exitStatsActivity();
   bool showPreviousStatsPage();
