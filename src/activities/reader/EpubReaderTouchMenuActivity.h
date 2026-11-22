@@ -38,7 +38,7 @@ class EpubReaderTouchMenuActivity final : public Activity {
       void* endGlobalSettingsEditContext, const char* dictionaryFontFamilyName, uint8_t dictionaryFontPointSize,
       bool hasDictionaryFontOverride,
       ReaderOptionsActivity::DictionaryFontChangedCallback dictionaryFontChangedCallback,
-      void* dictionaryFontChangedContext, ReaderDrawerState initialState = {});
+      void* dictionaryFontChangedContext, const ReaderDrawerState& initialState = {});
 
   void onEnter() override;
   void onExit() override;

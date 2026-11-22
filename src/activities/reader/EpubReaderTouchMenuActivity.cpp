@@ -309,7 +309,7 @@ EpubReaderTouchMenuActivity::EpubReaderTouchMenuActivity(
     ReaderOptionsActivity::GlobalSettingsEditCallback endGlobalSettingsEditCallback, void* endGlobalSettingsEditContext,
     const char* dictionaryFontFamilyName, const uint8_t dictionaryFontPointSize, const bool hasDictionaryFontOverride,
     ReaderOptionsActivity::DictionaryFontChangedCallback dictionaryFontChangedCallback,
-    void* dictionaryFontChangedContext, const ReaderDrawerState initialState)
+    void* dictionaryFontChangedContext, const ReaderDrawerState& initialState)
     : Activity("EpubReaderTouchMenu", renderer, mappedInput),
       epub(std::move(epub)),
       previewModel(previewModel),
