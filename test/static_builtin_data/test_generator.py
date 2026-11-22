@@ -91,6 +91,41 @@ class NumericArrays(unittest.TestCase):
             self.assertEqual({x['name']: x['sha256'] for x in inventory},
                              json.loads((Path(__file__).parent/'canonical-languages.json').read_text()))
 
+    def test_packed_keys_whole_header_logical_guard(self):
+        import re
+        import sys
+        import tempfile
+        sys.path.insert(0, str(ROOT / 'scripts'))
+        import gen_i18n as i18n
+        languages, names, bcp, keys, translations, _ = i18n.load_translations(ROOT/'lib/I18n/translations')
+        self.assertEqual(len(languages), 35)
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory)
+            i18n.generate_keys_header(languages, names, bcp, keys, str(out/'I18nKeys.h'))
+            raw = (out/'I18nKeys.h').read_bytes()
+            self.assertNotIn(b'CROSSCUB_PACKED_I18N_KEYS_H', raw)
+            i18n.generate_strings_header(languages, str(out/'I18nStrings.h'))
+            i18n.generate_strings_cpp(languages, names, keys, translations, str(out/'I18nStrings.cpp'))
+            i18n.generate_static_variant(out)
+            packed = (out/'I18nKeys.h').read_bytes()
+            prefix = b'#ifndef CROSSCUB_PACKED_I18N_KEYS_H\n#define CROSSCUB_PACKED_I18N_KEYS_H\n'
+            suffix = b'#endif  // CROSSCUB_PACKED_I18N_KEYS_H\n'
+            self.assertTrue(packed.startswith(prefix), 'physical copies need one logical header identity')
+            self.assertTrue(packed.endswith(suffix))
+            guard = 'defined(CROSSPOINT_STATIC_BUILTINS) || defined(STATIC_BUILTIN_HOST_TEST)'
+            expected = re.sub(r'extern const char (STRINGS_(?!EN_DATA)(\w+)_DATA)\[\];',
+                              lambda m: f'#if {guard}\nextern const char* const {m[1]};\n#else\n{m[0]}\n#endif',
+                              raw.decode()).encode()
+            self.assertEqual(packed[len(prefix):-len(suffix)], expected,
+                             'only whole-header guard may change existing packed keys bytes')
+            self.assertTrue(expected.startswith(b'#pragma once\n'))
+            # Partial locale input must still fail before changing any header.
+            i18n.generate_strings_cpp(languages, names, keys, translations,
+                                      str(out/'I18nStrings.cpp'), builtin={'EN'})
+            with self.assertRaisesRegex(ValueError, 'all 35 languages'):
+                i18n.generate_static_variant(out)
+            self.assertEqual((out/'I18nKeys.h').read_bytes(), packed)
+
     def test_private_bundle_has_single_transaction_owner(self):
         self.assertTrue(hasattr(gen, 'generate'), 'single boot transaction generator missing')
         import tempfile

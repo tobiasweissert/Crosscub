@@ -943,6 +943,9 @@ def generate_static_variant(output_dir):
         text = path.read_text()
         text = re.sub(r'extern const char (STRINGS_(?!EN_DATA)(\w+)_DATA)\[\];',
                       lambda m: f'#if {guard}\nextern const char* const {m[1]};\n#else\n{m[0]}\n#endif', text)
+        if filename == 'I18nKeys.h':
+            text = ('#ifndef CROSSCUB_PACKED_I18N_KEYS_H\n#define CROSSCUB_PACKED_I18N_KEYS_H\n'
+                    + text + '#endif  // CROSSCUB_PACKED_I18N_KEYS_H\n')
         path.write_text(text)
     inventory.sort(key=lambda x: x['name'])
     (out / 'language-inventory.json').write_text(json.dumps(inventory, indent=2)+'\n')
