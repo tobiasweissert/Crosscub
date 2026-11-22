@@ -31,6 +31,6 @@ class TtfRenderProfileStore {
   };
   static constexpr size_t MAX_PROFILES = 24;
   std::vector<Entry> entries_;
-  bool decode(const char* path, std::vector<Entry>& out) const;
+  static bool decode(const char* path, std::vector<Entry>& out);
 };
 #define TTF_RENDER_PROFILES TtfRenderProfileStore::getInstance()

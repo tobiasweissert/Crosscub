@@ -40,9 +40,9 @@ std::string storeFilePathForBook(const std::string& filePath, const std::string&
 }
 
 bool hasStoreRoots(const std::string& path) {
-  for (const char* suffix : {"", ".deleted", ".bak", ".tmp", ".rename.bak", ".migrate.bak"})
-    if (Storage.exists((path + suffix).c_str())) return true;
-  return false;
+  const auto suffixes = {"", ".deleted", ".bak", ".tmp", ".rename.bak", ".migrate.bak"};
+  return std::any_of(suffixes.begin(), suffixes.end(),
+                     [&](const char* suffix) { return Storage.exists((path + suffix).c_str()); });
 }
 
 std::string modernStorePathForBook(const std::string& path, const std::string& type) {
@@ -159,8 +159,10 @@ bool ClippingStore::loadForBookImpl(const std::string& filePath, const std::stri
   storeFilePath = existingStorePathForBook(filePath, bookType);
   if (storeFilePath.empty()) return false;
   // Retained publication roots are durable uncertainty, never empty new data.
-  for (const char* suffix : {".tmp", ".bak", ".rename.bak", ".migrate.bak"})
-    if (Storage.exists((storeFilePath + suffix).c_str())) return false;
+  const auto suffixes = {".tmp", ".bak", ".rename.bak", ".migrate.bak"};
+  if (std::any_of(suffixes.begin(), suffixes.end(),
+                  [&](const char* suffix) { return Storage.exists((storeFilePath + suffix).c_str()); }))
+    return false;
   if (!Storage.exists(storeFilePath.c_str())) {
     if (hasStoreRoots(storeFilePath)) return false;
     return loaded = true;
@@ -740,7 +742,8 @@ bool ClippingStore::writeToFile(const std::string* replacementText, const size_t
 
 bool ClippingStore::hasAnyClippings() {
   std::vector<ClippedBookEntry> books;
-  return getAllClippedBooks(books) && !books.empty();
+  getAllClippedBooks(books);
+  return !books.empty();
 }
 
 bool ClippingStore::getAllClippedBooks(std::vector<ClippedBookEntry>& out) {
@@ -776,8 +779,10 @@ bool ClippingStore::canDeleteForFilePath(const std::string& filePath, const std:
   const std::string modern =
       std::string(CLIPPINGS_DIR) + "/" + bookType + "_" + std::to_string(std::hash<std::string>{}(filePath)) + ".bin";
   if (canonical != modern && Storage.exists(canonical.c_str()) && Storage.exists(modern.c_str())) return false;
-  for (const char* suffix : {".bak", ".tmp", ".rename.bak", ".migrate.bak"})
-    if (Storage.exists((path + suffix).c_str())) return false;
+  const auto suffixes = {".bak", ".tmp", ".rename.bak", ".migrate.bak"};
+  if (std::any_of(suffixes.begin(), suffixes.end(),
+                  [&](const char* suffix) { return Storage.exists((path + suffix).c_str()); }))
+    return false;
   if (!Storage.exists(path.c_str()) && hasStoreRoots(path)) return false;
   return true;
 }
@@ -1099,8 +1104,7 @@ bool ClippingStore::moveBook(const std::string& from, const std::string& to) {
     return false;
   const auto validBookPath = [](const std::string& path) {
     if (path.size() > CLIPPING_TEXT_MAX || path.back() == '/') return false;
-    for (unsigned char c : path)
-      if (c < 0x20 || c == 0x7f) return false;
+    if (std::any_of(path.begin(), path.end(), [](unsigned char c) { return c < 0x20 || c == 0x7f; })) return false;
     size_t at = 1;
     while (at < path.size()) {
       const auto end = path.find('/', at);

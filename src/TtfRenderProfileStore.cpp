@@ -37,18 +37,21 @@ TtfRenderProfileStore& TtfRenderProfileStore::getInstance() {
   return store;
 }
 TtfRenderProfile TtfRenderProfileStore::profileFor(const char* family) const {
-  if (family)
-    for (const auto& e : entries_)
-      if (e.family == family) return e.profile;
+  if (family) {
+    const auto it =
+        std::find_if(entries_.begin(), entries_.end(), [family](const auto& e) { return e.family == family; });
+    if (it != entries_.end()) return it->profile;
+  }
   return {};
 }
 bool TtfRenderProfileStore::setProfile(const char* family, const TtfRenderProfile& profile) {
   if (!safe(family) || !profile.valid()) return false;
-  for (auto& e : entries_)
-    if (e.family == family) {
-      e.profile = profile;
-      return true;
-    }
+  const auto it =
+      std::find_if(entries_.begin(), entries_.end(), [family](const auto& e) { return e.family == family; });
+  if (it != entries_.end()) {
+    it->profile = profile;
+    return true;
+  }
   if (entries_.size() >= MAX_PROFILES) return false;
   entries_.push_back({family, profile});
   return true;
@@ -60,7 +63,7 @@ bool TtfRenderProfileStore::resetProfile(const char* family) {
       entries_.end());
   return true;
 }
-bool TtfRenderProfileStore::decode(const char* path, std::vector<Entry>& out) const {
+bool TtfRenderProfileStore::decode(const char* path, std::vector<Entry>& out) {
   HalFile f = Storage.open(path);
   uint8_t header[5];
   if (!f || f.size() > 4096 || f.read(header, 5) != 5 || memcmp(header, "CTP1", 4) || header[4] > MAX_PROFILES)
@@ -76,8 +79,7 @@ bool TtfRenderProfileStore::decode(const char* path, std::vector<Entry>& out) co
     TtfRenderProfile p{data[0] != 0, static_cast<uint16_t>(data[1] | data[2] << 8),
                        static_cast<uint16_t>(data[3] | data[4] << 8)};
     if (data[0] > 1 || !p.valid()) return false;
-    for (const auto& e : out)
-      if (e.family == family) return false;
+    if (std::any_of(out.begin(), out.end(), [&family](const auto& e) { return e.family == family; })) return false;
     digest = hash(digest, &n, 1);
     digest = hash(digest, family, n);
     digest = hash(digest, data, 5);
@@ -104,7 +106,7 @@ bool TtfRenderProfileStore::saveToFile() const {
   if (!Storage.mkdir("/.crosspoint", true) && !Storage.exists("/.crosspoint")) return false;
   HalFile f;
   if (!Storage.openFileForWrite("TTFPROFILE", Temp, f)) return false;
-  uint8_t header[5] = {'C', 'T', 'P', '1', static_cast<uint8_t>(entries_.size())};
+  const uint8_t header[5] = {'C', 'T', 'P', '1', static_cast<uint8_t>(entries_.size())};
   uint32_t digest = hash(2166136261u, header, 5);
   bool ok = f.write(header, 5) == 5;
   for (const auto& e : entries_) {
@@ -115,8 +117,8 @@ bool TtfRenderProfileStore::saveToFile() const {
     digest = hash(digest, data, 5);
     ok = ok && f.write(&n, 1) == 1 && f.write(e.family.data(), n) == n && f.write(data, 5) == 5;
   }
-  uint8_t stored[4] = {static_cast<uint8_t>(digest), static_cast<uint8_t>(digest >> 8),
-                       static_cast<uint8_t>(digest >> 16), static_cast<uint8_t>(digest >> 24)};
+  const uint8_t stored[4] = {static_cast<uint8_t>(digest), static_cast<uint8_t>(digest >> 8),
+                             static_cast<uint8_t>(digest >> 16), static_cast<uint8_t>(digest >> 24)};
   ok = ok && f.write(stored, 4) == 4;
   ok = f.sync() && ok;
   ok = f.close() && ok;
