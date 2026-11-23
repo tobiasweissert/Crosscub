@@ -983,9 +983,12 @@ void EpubReaderTouchMenuActivity::buildDrawerKeypad(UiApp::ScreenType& screen, c
   const int16_t cellW = static_cast<int16_t>((gridArea.width - gridProps.gap * 2) / 3);
   const int16_t tightestCell = std::min<int16_t>(cellH, cellW);
   gridProps.minTouchSize = std::min<int16_t>(theme.minTouchSize, std::max<int16_t>(1, tightestCell));
-  gridProps.radius = 3;
 #if defined(FREEINK_DEVICE_STICKY) && FREEINK_DEVICE_STICKY
   gridProps.radius = fui::KeyboardProps{}.keyRadius;
+#else
+  gridProps.radius = 3;
+#endif
+#if defined(FREEINK_DEVICE_STICKY) && FREEINK_DEVICE_STICKY
   uiTarget.setFont(fui::GfxRendererTarget::FONT_BODY, UI_12_FONT_ID);
   gridProps.labelText = fui::TextStyle{};
   gridProps.labelText.font = fui::GfxRendererTarget::FONT_BODY;
