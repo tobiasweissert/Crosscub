@@ -35,6 +35,14 @@ class KeyboardEntryActivity : public Activity {
   void render(RenderLock&&) override;
   bool preventAutoSleep() override { return true; }
 
+  // Synchronous paint-only snapshot for Lua-owned editors. No onEnter/loop,
+  // activity-stack push, storage, completion callback or input ownership transfer.
+  void paintSnapshot(size_t cursor, bool shift, bool symbolLayer, int focus, int language = -1);
+  int snapshotTouch(size_t cursor, bool symbolLayer, int x, int y, int language = -1);
+  int snapshotLayoutIndex(bool next) const;
+  const freeink::ui::InteractionBuffer<56>& paintedInteractions() const { return interactions; }
+  const freeink::ui::KeyboardKey* paintedKey(int16_t value) const;
+
  private:
   std::string title;
   std::string text;
@@ -127,6 +135,9 @@ class KeyboardEntryActivity : public Activity {
   static size_t utf8Next(const std::string& s, size_t pos);
 
   freeink::ui::Rect keyboardRect() const;
+  void paint();
+  int inputStartY() const;
+  int inputViewportStart(std::string& displayText, int maxWidth) const;
 
   static constexpr uint16_t LONG_PRESS_MS = 500;
   static constexpr uint16_t DEL_LONG_PRESS_MS = 1500;

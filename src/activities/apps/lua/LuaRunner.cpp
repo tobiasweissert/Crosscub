@@ -24,6 +24,7 @@
 #include "GfxRenderer.h"
 #include "HalPowerManager.h"
 #include "Logging.h"
+#include "LuaKeyboardPaint.h"
 #include "LuaRuntime.h"
 #include "MappedInputManager.h"
 #include "Memory.h"
@@ -573,6 +574,7 @@ void LuaRunner::registerSmudgeApi() {
   lua_pushcfunction(L, l_browserImage);
   lua_setfield(L, -2, "browser_image");
 
+  keyboard::registerPaint(L, renderer_);
   lua_pushcfunction(L, l_clear);
   lua_setfield(L, -2, "clear");
 

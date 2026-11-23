@@ -5,7 +5,7 @@ Supply existing read-only dependency/fixture paths via environment; no downloads
 from pathlib import Path
 import argparse,json,os,subprocess,sys,time,hashlib
 R=Path(__file__).resolve().parents[2]
-p=argparse.ArgumentParser();p.add_argument('--output',type=Path,required=True);p.add_argument('--reader-only',action='store_true');p.add_argument('--airdrop-only',action='store_true');p.add_argument('--ota-only',action='store_true');p.add_argument('--heatmap-only',action='store_true');a=p.parse_args();O=a.output.resolve();O.mkdir(parents=True,exist_ok=True)
+p=argparse.ArgumentParser();p.add_argument('--output',type=Path,required=True);p.add_argument('--reader-only',action='store_true');p.add_argument('--airdrop-only',action='store_true');p.add_argument('--ota-only',action='store_true');p.add_argument('--keyboard-only',action='store_true');p.add_argument('--keyboard-mode',choices=['all','normal','ubsan'],default='all');p.add_argument('--heatmap-only',action='store_true');a=p.parse_args();O=a.output.resolve();O.mkdir(parents=True,exist_ok=True)
 heatmap_commands=[[sys.executable,str(R/'test/reading_heatmap/run.py')]+(['--sanitize'] if sanitized else []) for sanitized in [False,True]]
 ota_commands=[
  [sys.executable,str(R/'test/ota_transition/run.py'),'--output',str(O/('ota-ubsan' if sanitized else 'ota-normal'))]+(['--sanitize'] if sanitized else [])
@@ -14,6 +14,20 @@ ota_commands=[
  [sys.executable,str(R/'test/ota_bootstrap/run.py')],
  [sys.executable,'-m','unittest','discover','-s',str(R/'test/ota_release'),'-v'],
 ]
+keyboard_commands=[
+ [sys.executable,str(R/'test/keyboard_unification/run.py'),'--output',str(O/('keyboard-ubsan' if sanitized else 'keyboard-normal'))]+(['--sanitize'] if sanitized else [])
+ for sanitized in [False,True] if a.keyboard_mode=='all' or sanitized==(a.keyboard_mode=='ubsan')
+]
+if a.keyboard_only:
+ if not os.environ.get('KEYBOARD_APP_FIXTURES'):
+  p.error('--keyboard-only requires KEYBOARD_APP_FIXTURES (the read-only keyboard donor apps directory)')
+ rows=[]
+ for index,command in enumerate(keyboard_commands):
+  log=O/f'keyboard-{index:02d}.log'
+  with log.open('w') as f:code=subprocess.run(command,cwd=R,stdout=f,stderr=subprocess.STDOUT,timeout=600).returncode
+  rows.append({'command':command,'exit':code,'log':str(log)});print(index,code,flush=True)
+ (O/'results.json').write_text(json.dumps(rows,indent=2)+'\n')
+ raise SystemExit(any(row['exit'] for row in rows))
 if a.ota_only:
  rows=[]
  for index,command in enumerate(ota_commands):
@@ -75,7 +89,7 @@ for key in ['ARDUINOJSON_INCLUDE_DIR','CP_FIXTURES','ESP_IDF_SOURCE_ROOT']:
  if not os.environ.get(key)or not Path(os.environ[key]).is_dir():raise SystemExit('Set '+key+' to the existing read-only dependency/fixture directory')
 env={**os.environ,'ASSISTED_TEST_OUT':str(O/'browser'),'AIRDROP_SESSION_TEST_OUTPUT':str(O/'receiver'),'PYTHONDONTWRITEBYTECODE':'1'}
 env.setdefault('BROWSER_CODEC_ROOT',str(Path(env['ARDUINOJSON_INCLUDE_DIR']).resolve().parents[1]))
-commands=heatmap_commands+ota_commands+airdrop_commands+reader_commands+[[sys.executable,str(R/'test/file_actions/run_all.py'),'--output',str(O/'file-actions')]]+[[sys.executable,str(R/'test/crosscub'/('test_'+name+'.py'))]for name in ['product','web','release','ota_activity','logo','stopwatch']]
+commands=(keyboard_commands if env.get('KEYBOARD_APP_FIXTURES') else [])+heatmap_commands+ota_commands+airdrop_commands+reader_commands+[[sys.executable,str(R/'test/file_actions/run_all.py'),'--output',str(O/'file-actions')]]+[[sys.executable,str(R/'test/crosscub'/('test_'+name+'.py'))]for name in ['product','web','release','ota_activity','logo','stopwatch']]
 commands+=[
  [sys.executable,str(R/'test/integration_catalog/check_catalog.py')],
  [sys.executable,str(R/'test/crosscub/run_preservation.py'),'--group','apps','--output',str(O/'apps')],

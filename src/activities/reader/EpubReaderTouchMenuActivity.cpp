@@ -984,7 +984,19 @@ void EpubReaderTouchMenuActivity::buildDrawerKeypad(UiApp::ScreenType& screen, c
   const int16_t tightestCell = std::min<int16_t>(cellH, cellW);
   gridProps.minTouchSize = std::min<int16_t>(theme.minTouchSize, std::max<int16_t>(1, tightestCell));
   gridProps.radius = 3;
+#if defined(FREEINK_DEVICE_STICKY) && FREEINK_DEVICE_STICKY
+  gridProps.radius = fui::KeyboardProps{}.keyRadius;
+  uiTarget.setFont(fui::GfxRendererTarget::FONT_BODY, UI_12_FONT_ID);
+  gridProps.labelText = fui::TextStyle{};
+  gridProps.labelText.font = fui::GfxRendererTarget::FONT_BODY;
+  gridProps.labelText.align = fui::TextAlign::Center;
+#endif
   fui::keyGrid(screen.frame(), gridArea, gridProps);
+#if defined(FREEINK_DEVICE_STICKY) && FREEINK_DEVICE_STICKY
+  // keyGrid draws immediately; keep the shared target's configured body font
+  // for subsequent headers, readouts and non-keypad panes.
+  uiTarget.setFont(fui::GfxRendererTarget::FONT_BODY, uiScaleSpec().bodyFontId);
+#endif
 }
 
 void EpubReaderTouchMenuActivity::buildAutoPageTurnPane(UiApp::ScreenType& screen) {

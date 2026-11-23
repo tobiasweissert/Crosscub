@@ -341,6 +341,9 @@ void FrontlightTimePickerActivity::render(RenderLock&&) {
     fui::KeyGridProps props;
     props.keys = keys;
     props.rows = kKeyboardRows;
+#if defined(FREEINK_DEVICE_STICKY) && FREEINK_DEVICE_STICKY
+    props.radius = fui::KeyboardProps{}.keyRadius;
+#endif
     props.cols = 3;
     props.action = kKeyboardAction;
     props.inputMask = static_cast<uint16_t>(fui::InputTouch | fui::InputLongPress);

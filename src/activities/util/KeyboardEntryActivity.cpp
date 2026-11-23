@@ -116,6 +116,58 @@ const fui::KeyboardLayout URL_SNIPPET_LAYOUT{URL_SNIP_ROWS, 4};
 
 }  // namespace
 
+void KeyboardEntryActivity::paintSnapshot(size_t cursor, bool shift, bool symbolLayer, int focus, int language) {
+  cursorPos = std::min(cursor, text.size());
+  while (cursorPos > 0 && cursorPos < text.size() && (static_cast<uint8_t>(text[cursorPos]) & 0xc0) == 0x80)
+    --cursorPos;
+  layoutId = language >= 0 && language < keyboard_layouts::COUNT ? keyboard_layouts::ALL[language].id
+                                                                 : keyboard_layouts::startingLayout();
+  const auto enabled = keyboard_layouts::enabled();
+  showLangKey = (enabled & (enabled - 1)) != 0;
+  shifted = shift;
+  symbols = symbolLayer;
+  const auto& layout = currentLayout();
+  int index = std::max(0, focus);
+  selRow = 0;
+  while (selRow + 1 < layout.rowCount && index >= layout.rows[selRow].count) index -= layout.rows[selRow++].count;
+  selCol = index;
+  clampSelection();
+  paint();
+}
+
+int KeyboardEntryActivity::snapshotTouch(size_t cursor, bool symbolLayer, int x, int y, int language) {
+  cursorPos = std::min(cursor, text.size());
+  layoutId = language >= 0 && language < keyboard_layouts::COUNT ? keyboard_layouts::ALL[language].id
+                                                                 : keyboard_layouts::startingLayout();
+  const auto enabled = keyboard_layouts::enabled();
+  showLangKey = (enabled & (enabled - 1)) != 0;
+  symbols = symbolLayer;
+  const auto& m = UITheme::getInstance().getMetrics();
+  const auto back = TouchHeaderBackButton::layout(
+                        Rect{0, m.topPadding, renderer.getScreenWidth(), TouchHeaderBackButton::height(m, mappedInput)})
+                        .touchRect;
+  if (x >= back.x && x < back.x + back.width && y >= back.y && y < back.y + back.height) return -2;
+  size_t position = 0;
+  if (inputFieldTouchTargetFromPoint(x, y, position) == InputFieldTouchTarget::Cursor)
+    return static_cast<int>(position);
+  return -1;
+}
+
+int KeyboardEntryActivity::snapshotLayoutIndex(bool next) const {
+  const auto id = next ? keyboard_layouts::next(layoutId) : layoutId;
+  for (int i = 0; i < keyboard_layouts::COUNT; ++i)
+    if (keyboard_layouts::ALL[i].id == id) return i;
+  return 0;
+}
+
+const fui::KeyboardKey* KeyboardEntryActivity::paintedKey(int16_t value) const {
+  const auto& layout = currentLayout();
+  for (int r = 0; r < layout.rowCount; ++r)
+    for (int c = 0; c < layout.rows[r].count; ++c)
+      if (layout.rows[r].keys[c].value == value) return &layout.rows[r].keys[c];
+  return nullptr;
+}
+
 void KeyboardEntryActivity::onEnter() {
   Activity::onEnter();
   cursorPos = text.length();
@@ -420,8 +472,7 @@ KeyboardEntryActivity::InputFieldTouchTarget KeyboardEntryActivity::inputFieldTo
   const auto& metrics = UITheme::getInstance().getMetrics();
 
   const int lineHeight = renderer.getLineHeight(UI_12_FONT_ID);
-  const int inputStartY = metrics.topPadding + TouchHeaderBackButton::height(metrics, mappedInput) +
-                          metrics.verticalSpacing + metrics.verticalSpacing * 4 + metrics.keyboardVerticalOffset;
+  const int inputStartY = this->inputStartY();
 
   int availableWidth = pageWidth;
   // Clear the side-button hint gutters, which only render on edge-button boards without touch.
@@ -439,7 +490,7 @@ KeyboardEntryActivity::InputFieldTouchTarget KeyboardEntryActivity::inputFieldTo
   const bool centerText = metrics.keyboardCenteredText;
   std::string displayText = displayTextForCurrentState();
 
-  int lineStartIdx = 0;
+  int lineStartIdx = inputViewportStart(displayText, maxLineWidth);
   int lineY = inputStartY;
   int lastLineStartIdx = 0;
   int lastLineEndIdx = static_cast<int>(displayText.length());
@@ -494,6 +545,9 @@ KeyboardEntryActivity::InputFieldTouchTarget KeyboardEntryActivity::inputFieldTo
     if (lineEndIdx == static_cast<int>(displayText.length())) {
       break;
     }
+#if defined(FREEINK_DEVICE_STICKY) && FREEINK_DEVICE_STICKY
+    if (lineY + 2 * lineHeight + metrics.verticalSpacing + 12 > keyboardRect().y) break;
+#endif
 
     lineY += lineHeight;
     lineStartIdx = lineEndIdx;
@@ -509,6 +563,37 @@ KeyboardEntryActivity::InputFieldTouchTarget KeyboardEntryActivity::inputFieldTo
   }
 
   return InputFieldTouchTarget::None;
+}
+
+int KeyboardEntryActivity::inputStartY() const {
+  const auto& m = UITheme::getInstance().getMetrics();
+  const int top = m.topPadding + TouchHeaderBackButton::height(m, mappedInput) + m.verticalSpacing;
+#if defined(FREEINK_DEVICE_STICKY) && FREEINK_DEVICE_STICKY
+  return top;
+#else
+  return top + m.verticalSpacing * 4 + m.keyboardVerticalOffset;
+#endif
+}
+
+int KeyboardEntryActivity::inputViewportStart(std::string& s, int width) const {
+#if defined(FREEINK_DEVICE_STICKY) && FREEINK_DEVICE_STICKY
+  const auto& m = UITheme::getInstance().getMetrics();
+  const int lh = renderer.getLineHeight(UI_12_FONT_ID);
+  const int lines = std::max(1, (keyboardRect().y - inputStartY() - m.verticalSpacing - 12) / lh);
+  int cursorLine = 0;
+  int start = 0;
+  while (start < static_cast<int>(s.size())) {
+    const int end = lineBreakEnd(s, start, width);
+    if (cursorPos < static_cast<size_t>(end) || end == static_cast<int>(s.size())) break;
+    ++cursorLine;
+    start = end;
+  }
+  int first = 0;
+  for (int i = 0; i <= cursorLine - lines; ++i) first = lineBreakEnd(s, first, width);
+  return first;
+#else
+  return 0;
+#endif
 }
 
 fui::Rect KeyboardEntryActivity::keyboardRect() const {
@@ -742,6 +827,11 @@ void KeyboardEntryActivity::loop() {
 }
 
 void KeyboardEntryActivity::render(RenderLock&&) {
+  paint();
+  renderer.displayBuffer();
+}
+
+void KeyboardEntryActivity::paint() {
   renderer.clearScreen();
 
   const auto pageWidth = renderer.getScreenWidth();
@@ -755,8 +845,7 @@ void KeyboardEntryActivity::render(RenderLock&&) {
   }
 
   const int lineHeight = renderer.getLineHeight(UI_12_FONT_ID);
-  const int inputStartY = metrics.topPadding + TouchHeaderBackButton::height(metrics, mappedInput) +
-                          metrics.verticalSpacing + metrics.verticalSpacing * 4 + metrics.keyboardVerticalOffset;
+  const int inputStartY = this->inputStartY();
   int inputHeight = 0;
 
   std::string displayText = displayTextForCurrentState();
@@ -794,7 +883,7 @@ void KeyboardEntryActivity::render(RenderLock&&) {
     if (w > cursorCharWidth) cursorCharWidth = w;
   }
 
-  int lineStartIdx = 0;
+  int lineStartIdx = inputViewportStart(displayText, maxLineWidth);
   int textWidth = 0;
   int cursorPixelX = effectiveMargin;
   int cursorLineY = inputStartY;
@@ -857,6 +946,9 @@ void KeyboardEntryActivity::render(RenderLock&&) {
       if (lineEndIdx == static_cast<int>(displayText.length())) {
         break;
       }
+#if defined(FREEINK_DEVICE_STICKY) && FREEINK_DEVICE_STICKY
+      if (inputStartY + inputHeight + 2 * lineHeight + metrics.verticalSpacing + 12 > keyboardRect().y) break;
+#endif
 
       inputHeight += lineHeight;
       lineStartIdx = lineEndIdx;
@@ -992,6 +1084,9 @@ void KeyboardEntryActivity::render(RenderLock&&) {
   fui::Frame<56> frame(target, device, noInput, interactions);
 
   fui::KeyboardProps props;
+#if defined(FREEINK_DEVICE_STICKY) && FREEINK_DEVICE_STICKY
+  props.background = fui::Paint::solid(fui::Color::White);
+#endif
   const fui::KeyboardLayout& layout = currentLayout();
   props.layout = &layout;
   props.keyAction = ACTION_KEY;  // one action id; loop() dispatches on key value
@@ -1020,8 +1115,6 @@ void KeyboardEntryActivity::render(RenderLock&&) {
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 
   GUI.drawSideButtonHints(renderer, ">", "<");
-
-  renderer.displayBuffer();
 }
 
 void KeyboardEntryActivity::onComplete(std::string text) {
