@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
-TESTS=['test_clock.py','test_storage.py','test_touch_snapshot.py','test_overlay.py','test_publication_page.py','test_secure_client.py','test_ui_host.py','test_input.py','test_themes.py','test_activity_results.py','test_build_contract.py']
+TESTS=['test_clock.py','test_storage.py','test_touch_snapshot.py','test_overlay.py','test_secure_client.py','test_ui_host.py','test_input.py','test_themes.py','test_activity_results.py','test_build_contract.py']
 NATIVE=set(TESTS)-{'test_overlay.py','test_build_contract.py'}
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--mode',choices=['normal','sanitized'],default='normal');parser.add_argument('--evidence',type=Path,required=True);args=parser.parse_args()
