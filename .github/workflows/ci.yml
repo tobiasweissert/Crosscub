@@ -6,6 +6,10 @@ on:
   pull_request:
   workflow_dispatch:
     inputs:
+      cold_qualification:
+        description: Non-distributing cold Sticky qualification (no publication)
+        type: boolean
+        default: false
       environment:
         description: Non-distributing build environment
         type: choice
@@ -151,10 +155,15 @@ jobs:
         environment: ["${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'sticky' }}"]
     env:
       PIO_ENV: ${{ matrix.environment }}
+      COLD_QUALIFICATION: ${{ github.event_name == 'workflow_dispatch' && inputs.cold_qualification == true }}
     steps:
       - name: Validate selected build environment
         run: |
           set -euo pipefail
+          if test "${COLD_QUALIFICATION:-false}" = true && test "$PIO_ENV" != sticky; then
+            printf '%s\n' 'Cold qualification requires exact sticky environment' >&2
+            exit 1
+          fi
           case "$PIO_ENV" in
             sticky|sticky-static-builtins-experimental) ;;
             *) printf '%s\n' 'Invalid build environment' >&2; exit 1 ;;
@@ -176,6 +185,7 @@ jobs:
           enable-cache: true
 
       - name: Cache PlatformIO packages
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.cold_qualification == true) }}
         uses: actions/cache@v4
         with:
           # Do not cache PlatformIO's Python virtual environment. It is tied to
@@ -187,6 +197,14 @@ jobs:
 
       - name: Install PlatformIO Core
         run: uv pip install --system -U https://github.com/pioarduino/platformio-core/archive/refs/tags/v6.1.19.zip
+
+      - name: Admit fresh cold Sticky state before resolver
+        if: github.event_name == 'workflow_dispatch' && inputs.cold_qualification == true
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p sticky-evidence
+          python3 -B scripts/check_sticky_cold_state.py fresh > sticky-evidence/cold-fresh.json
 
       - name: Pin nested core and verify source toolchain pins
         run: |
@@ -203,6 +221,16 @@ jobs:
           for exe in ['pio', str(pathlib.Path.home()/'.platformio/penv/bin/pio')]:
               assert '6.1.19' in subprocess.check_output([exe, '--version'], text=True)
           PY
+
+      - name: Admit coherent outer and nested cold Core roots
+        if: github.event_name == 'workflow_dispatch' && inputs.cold_qualification == true
+        run: |
+          set -euo pipefail
+          umask 077
+          python3 -B scripts/check_sticky_cold_state.py coherent > sticky-evidence/cold-coherent.json
+
+      - name: Test offline cold qualification contract
+        run: python3 -B -m unittest discover -s test/ota_release -p test_cold_qualification.py -v
 
       - name: Require recipient-encrypted artifact retention
         id: recipient
