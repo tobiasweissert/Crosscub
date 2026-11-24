@@ -1139,18 +1139,22 @@ class AppStoreActivity : public Activity {
     } else {
       renderer.drawRoundedRect(layout.left, layout.updateY, layout.right - layout.left, 60, 1, 6, true);
     }
-    if (updateAllFocused_) renderer.drawRoundedRect(layout.left - 3, layout.updateY - 3,
-                                                   layout.right - layout.left + 6, 66, 1, 6, true);
+    if (updateAllFocused_)
+      renderer.drawRoundedRect(layout.left - 3, layout.updateY - 3, layout.right - layout.left + 6, 66, 1, 6, true);
     const char* updateLabel = "Update all apps";
-    renderer.drawText(SMALL_FONT_ID,
-                      layout.left + (layout.right - layout.left - renderer.getTextWidth(SMALL_FONT_ID, updateLabel)) / 2,
-                      layout.updateY + 6, updateLabel, updates == 0, EpdFontFamily::BOLD);
+    renderer.drawText(
+        SMALL_FONT_ID,
+        layout.left + (layout.right - layout.left - renderer.getTextWidth(SMALL_FONT_ID, updateLabel)) / 2,
+        layout.updateY + 6, updateLabel, updates == 0, EpdFontFamily::BOLD);
     char updateStatus[64];
-    if (updates == 0) snprintf(updateStatus, sizeof(updateStatus), "No updates available");
-    else snprintf(updateStatus, sizeof(updateStatus), "%d updates available", updates);
-    renderer.drawText(SMALL_FONT_ID,
-                      layout.left + (layout.right - layout.left - renderer.getTextWidth(SMALL_FONT_ID, updateStatus)) / 2,
-                      layout.updateY + 32, updateStatus, updates == 0);
+    if (updates == 0)
+      snprintf(updateStatus, sizeof(updateStatus), "No updates available");
+    else
+      snprintf(updateStatus, sizeof(updateStatus), "%d updates available", updates);
+    renderer.drawText(
+        SMALL_FONT_ID,
+        layout.left + (layout.right - layout.left - renderer.getTextWidth(SMALL_FONT_ID, updateStatus)) / 2,
+        layout.updateY + 32, updateStatus, updates == 0);
 
     const int count = static_cast<int>(apps_.size());
     const int pageStart = selectedIndex_ / layout.rowsPerPage * layout.rowsPerPage;
@@ -1352,8 +1356,8 @@ class AppStoreActivity : public Activity {
     const auto rect = downloadCancelRect();
     if (mappedInput.isPressed(MappedInputManager::Button::Back) ||
         mappedInput.wasReleased(MappedInputManager::Button::Back) ||
-        (mappedInput.hasTouch() && mappedInput.wasScreenTapped(tx, ty) &&
-         tx >= rect.x && tx < rect.x + rect.width && ty >= rect.y && ty < rect.y + rect.height)) {
+        (mappedInput.hasTouch() && mappedInput.wasScreenTapped(tx, ty) && tx >= rect.x && tx < rect.x + rect.width &&
+         ty >= rect.y && ty < rect.y + rect.height)) {
       cancelDownload_ = true;
     }
     return cancelDownload_;
