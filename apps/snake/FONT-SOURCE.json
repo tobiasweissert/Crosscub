@@ -1,0 +1,26 @@
+{
+  "name": "Snake Paper",
+  "source": "https://github.com/rsms/inter",
+  "source_sha256": "29160a80ff49ddcab2c97711247e08b1fab27a484a329ce8b813d820dc559031",
+  "license": "OFL-Inter.txt",
+  "generator": "test/snake/generate_fonts.py",
+  "format": "MSB-first, row-major, 0=ink 1=paper; generated glyph masks, not screenshot assets",
+  "cuts": {
+    "title": [
+      36,
+      800
+    ],
+    "score": [
+      28,
+      800
+    ],
+    "body": [
+      22,
+      400
+    ],
+    "small": [
+      18,
+      400
+    ]
+  }
+}

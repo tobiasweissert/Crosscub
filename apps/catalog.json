@@ -1872,6 +1872,28 @@
         "main.lua",
         "manifest.json"
       ]
+    },
+    {
+      "id": "snake",
+      "name": "Snake",
+      "version": "0.1.0",
+      "author": "Tobias Weissert",
+      "description": "Minimalist swipe-controlled Snake for the Crosscub e-ink reader",
+      "files": [
+        "FONT-SOURCE.json",
+        "OFL-Inter.txt",
+        "README.md",
+        "core.lua",
+        "font-body.bin",
+        "font-score.bin",
+        "font-small.bin",
+        "font-title.bin",
+        "font.lua",
+        "font_metrics.lua",
+        "icon.raw",
+        "main.lua",
+        "manifest.json"
+      ]
     }
   ]
 }

@@ -1,0 +1,8 @@
+{
+  "id": "snake",
+  "name": "Snake",
+  "version": "0.1.0",
+  "author": "Tobias Weissert",
+  "description": "Minimalist swipe-controlled Snake for the Crosscub e-ink reader",
+  "entry": "main.lua"
+}
