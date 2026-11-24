@@ -1,0 +1,38 @@
+{
+  "derivative": "Stacked Sans \u2014 monochrome subset, renamed from Inter",
+  "source_url": "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/Inter%5Bopsz,wght%5D.ttf",
+  "source_sha256": "29160a80ff49ddcab2c97711247e08b1fab27a484a329ce8b813d820dc559031",
+  "license": "OFL-Inter.txt",
+  "generator": "test/stacked_clock/generate_fonts.py",
+  "polarity": "MSB-first row-major, 0=ink, 1=paper",
+  "cuts": {
+    "digits.bin": {
+      "sha256": "8763b4a5f9f6cc2f468ec0d1bbd74a75223575e35df549de32938405d804e483",
+      "bytes": 46257,
+      "points": 280,
+      "weight": 900,
+      "optical_size": 32
+    },
+    "digits_small.bin": {
+      "sha256": "a3a37cceee49713d8737783e12be64e2894c20938453d891654b2af5faad8d1e",
+      "bytes": 16943,
+      "points": 168,
+      "weight": 900,
+      "optical_size": 32
+    },
+    "date.bin": {
+      "sha256": "f6f86568bdf22ec0f0dba4e132c16430356a89ef41fe86dbc96a1bef86cbc9da",
+      "bytes": 4726,
+      "points": 34,
+      "weight": 800,
+      "optical_size": 32
+    },
+    "date_small.bin": {
+      "sha256": "0c7d4c0b5d68b1d3ba7b634c24da483a716e6bf6f1db9e730e4251aa2b46c29c",
+      "bytes": 1774,
+      "points": 20,
+      "weight": 800,
+      "optical_size": 32
+    }
+  }
+}

@@ -1850,6 +1850,28 @@
         "sticky_ui.lua",
         "ui.lua"
       ]
+    },
+    {
+      "id": "stacked-clock",
+      "name": "Clock",
+      "version": "0.1.0",
+      "author": "Tobias Weissert",
+      "description": "A full-screen, minute-updating e-ink clock with bold stacked numerals and a date.",
+      "min_api": 2,
+      "files": [
+        "FONT-SOURCE.json",
+        "OFL-Inter.txt",
+        "README.md",
+        "date.bin",
+        "date_small.bin",
+        "digits.bin",
+        "digits_small.bin",
+        "font.lua",
+        "font_metrics.lua",
+        "icon.raw",
+        "main.lua",
+        "manifest.json"
+      ]
     }
   ]
 }

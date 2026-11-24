@@ -1,0 +1,10 @@
+{
+  "id": "stacked-clock",
+  "name": "Clock",
+  "version": "0.1.0",
+  "author": "Tobias Weissert",
+  "description": "A full-screen, minute-updating e-ink clock with bold stacked numerals and a date.",
+  "entry": "main.lua",
+  "min_api": 2,
+  "prevent_sleep": true
+}
