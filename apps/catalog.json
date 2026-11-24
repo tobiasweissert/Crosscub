@@ -387,13 +387,27 @@
     {
       "id": "watertracker",
       "name": "Water Tracker",
-      "version": "1.0.1",
+      "version": "1.0.4",
       "author": "Mumfee",
-      "description": "Daily hydration tracker with a cute water cup that fills as you drink",
+      "description": "Daily hydration tracker with intake, goals, streaks and history",
       "files": [
-        "manifest.json",
+        "icon.raw",
         "main.lua",
-        "icon.raw"
+        "manifest.json",
+        "numeric_sans.lua",
+        "numeric_sans_128.bin",
+        "numeric_sans_150.bin",
+        "numeric_sans_180.bin",
+        "numeric_sans_24.bin",
+        "numeric_sans_32.bin",
+        "numeric_sans_48.bin",
+        "numeric_sans_64.bin",
+        "numeric_sans_96.bin",
+        "numeric_sans_OFL.txt",
+        "numeric_sans_SOURCE.txt",
+        "numeric_sans_metrics.lua",
+        "primary_numerals.lua",
+        "unified_ui.lua"
       ]
     },
     {

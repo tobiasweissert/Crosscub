@@ -1,8 +1,8 @@
 {
   "id": "watertracker",
   "name": "Water Tracker",
-  "version": "1.0.1",
+  "version": "1.0.4",
   "author": "Mumfee",
-  "description": "Daily hydration tracker with a cute pixel water cup that fills as you drink",
+  "description": "Daily hydration tracker with intake, goals, streaks and history",
   "entry": "main.lua"
 }

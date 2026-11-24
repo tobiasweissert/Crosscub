@@ -1,0 +1,8 @@
+Crosscub Numeric Sans v1
+Modified monochrome numeric bitmap subset; SIL Open Font License 1.1.
+Source: Liberation Sans Bold, installed Debian Liberation Fonts.
+Source SHA-256: b72c65e551d653b54217ffad0d1454ce0657e4e8d4a28bcc79e0acd2598f4bf3
+Generated with Pillow/FreeType from the licensed source font, not PDF glyphs.
+Repertoire: 0123456789:-.+% ABCDEFGHIJKLMNOPQRSTUVWXYZ
+Cuts (maximum digit ink height): 24,32,48,64,96,128,150,180
+See numeric_sans_OFL.txt for original copyright, reserved names and full license.
