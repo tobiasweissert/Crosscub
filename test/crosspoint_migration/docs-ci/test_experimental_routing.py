@@ -67,7 +67,7 @@ class ExperimentalRouting(unittest.TestCase):
             (root/'scripts/ci_producer_capture.py').write_text(producer)
             for name in ['sticky', EXPERIMENT]:
                 record = root/'record'; record.write_text('')
-                env = {**os.environ, 'PATH': str(tools)+':'+os.environ['PATH'], 'PIO_ENV': name, 'RECORD': str(record), 'GITHUB_WORKSPACE': str(root)}
+                env = {**os.environ, 'PATH': str(tools)+':'+os.environ['PATH'], 'PIO_ENV': name, 'RECORD': str(record), 'GITHUB_WORKSPACE': str(root), 'COLD_QUALIFICATION': 'false'}
                 subprocess.run(['bash', '-c', 'set -euo pipefail\n'+block('Validate selected build environment')], cwd=root, env=env, check=True)
                 build = block('Build ${{ matrix.environment }} firmware')
                 subprocess.run(['bash', '-c', build], cwd=root, env=env, check=True)
@@ -88,6 +88,14 @@ class ExperimentalRouting(unittest.TestCase):
                 result = subprocess.run(['bash', '-c', block('Validate selected build environment')], env={**os.environ, 'PIO_ENV': name}, cwd=root, capture_output=True)
                 self.assertNotEqual(result.returncode, 0)
             self.assertFalse((root/'INJECTED').exists())
+
+    def test_ordinary_cli_fixture_under_ambient_cold_mode(self):
+        from unittest.mock import patch
+        # The hosted cold job still exercises ordinary routing as a fixture.
+        # Production cold-environment rejection is covered independently.
+        with patch.dict(os.environ, {'COLD_QUALIFICATION': 'true'}):
+            self.test_actual_cli_two_environments_and_invalid_rejected()
+            self.assertEqual(os.environ['COLD_QUALIFICATION'], 'true')
 
     def run_isolated_diagnostic(self, producer, watchdog=28, build_lines=None, invoked=True):
         """Actual extracted function; SYNTHETIC producers, not native SDK proof.
