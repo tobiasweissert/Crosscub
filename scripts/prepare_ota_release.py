@@ -63,14 +63,13 @@ def qualify_source(version, *, repository, event, ref, actor, publish, source_sh
             raise ValueError('commit matching version fields before release: [' + section + ']')
 
 
-def github(endpoint, *, fields=None):
+def github(endpoint, *, fields=None, method=None):
     """Only exact HTTP 404 means absent; auth/rate-limit/network failures stop release."""
     command = ['gh', 'api', '--hostname', 'github.com', 'repos/' + REPOSITORY + '/' + endpoint]
     if fields is not None:
-        command.extend(['--method', 'POST'])
-        for key, value in fields.items():
-            command.extend(['--raw-field', key + '=' + value])
-    result = subprocess.run(command, text=True, capture_output=True)
+        command.extend(['--method', method or 'POST', '--input', '-'])
+    result = subprocess.run(command, input=json.dumps(fields) if fields is not None else None,
+                            text=True, capture_output=True)
     if result.returncode:
         if '(HTTP 404)' in result.stderr:
             return None
@@ -87,6 +86,21 @@ def check_remote(version, *, skip_published=False):
             print('Already published stable release: no build, upload, redraft or replacement.')
             return False
         raise ValueError('release already exists; never overwrite or redraft it (including duplicate tag workflows)')
+    # Authenticated tag lookup may return 404 for a draft. Enumerate bounded
+    # pages before declaring admission; any malformed/incomplete response fails closed.
+    for page in range(1, 11):
+        releases = github(f'releases?per_page=100&page={page}')
+        if not isinstance(releases, list):
+            raise ValueError('cannot enumerate releases for draft admission')
+        if any(not isinstance(r, dict) or not isinstance(r.get('tag_name'), str)
+               or not r['tag_name'] for r in releases):
+            raise ValueError('malformed release enumeration')
+        if any(r['tag_name'] == 'crosscub-v' + version for r in releases):
+            raise ValueError('release/draft already exists; explicit recovery required')
+        if len(releases) < 100:
+            break
+    else:
+        raise ValueError('release enumeration exceeded admission bound')
     latest = github('releases/latest')
     if latest is not None:
         tag = latest.get('tag_name', '')
@@ -127,37 +141,99 @@ def upload_release(version, firmware, source_sha, *, publish=False):
     check_remote(version)
     tag = report['tag']
     ensure_remote_tag(tag, source_sha)
-    release_command(['create', tag, str(firmware), '--repo', REPOSITORY, '--target', source_sha,
-                     '--verify-tag', '--draft', '--prerelease=false', '--latest=false', '--title', 'Crosscub Firmware v' + version,
-                     '--notes', 'Owner-qualified Crosscub Sticky OTA update. SHA256: ' + report['sha256']])
-    def verify(draft):
-        release = github('releases/tags/' + tag)
-        if not release or release.get('tag_name') != tag or release.get('draft') is not draft or release.get('prerelease') is not False:
-            raise ValueError('GitHub release state read-back mismatch')
-        assets = release.get('assets', [])
-        expected_url = f'https://github.com/{REPOSITORY}/releases/download/{tag}/{report["filename"]}'
-        if len(assets) != 1 or any([
-                assets[0].get('name') != report['filename'], assets[0].get('size') != report['size'],
-                assets[0].get('digest') != 'sha256:' + report['sha256'],
-                assets[0].get('browser_download_url') != expected_url]):
-            raise ValueError('GitHub uploaded asset name/size/digest/owner URL mismatch; do not publish')
-        ref = github('git/ref/tags/' + tag)
-        obj = ref.get('object', {}) if ref else {}
-        for _ in range(4):
-            if obj.get('type') != 'tag':
-                break
-            annotation = github('git/tags/' + obj['sha'])
-            obj = annotation.get('object', {}) if annotation else {}
-        if obj.get('type') != 'commit' or obj.get('sha') != source_sha:
-            raise ValueError('GitHub tag does not resolve to qualified source SHA')
-        return release
-    verify(True)
+    created = github('releases', fields={'tag_name': tag, 'target_commitish': source_sha,
+                     'draft': True, 'prerelease': False, 'make_latest': 'false',
+                     'name': 'Crosscub Firmware v' + version,
+                     'body': 'Owner-qualified Crosscub Sticky OTA update. SHA256: ' + report['sha256']})
+    release_id = release_identity(created, tag, source_sha, True)
+    subprocess.run(['gh', 'api', '--hostname', 'github.com', '--method', 'POST',
+                    f'https://uploads.github.com/repos/{REPOSITORY}/releases/{release_id}/assets?name={report["filename"]}',
+                    '-H', 'Content-Type: application/octet-stream', '--input', str(firmware)],
+                   check=True, capture_output=True)
+    verify_release(release_id, report, source_sha, draft=True)
     if publish:
-        release_command(['edit', tag, '--repo', REPOSITORY, '--draft=false', '--prerelease=false', '--latest'])
-        release = verify(False)
-        latest = github('releases/latest')
-        if not latest or latest.get('tag_name') != tag or latest.get('draft') is not False or latest.get('prerelease') is not False:
-            raise ValueError('published release was not confirmed at GitHub /latest')
+        publish_verified(release_id, report, source_sha)
+    return report
+
+
+def release_identity(release, tag, source_sha, draft):
+    release_id = release.get('id') if isinstance(release, dict) else None
+    if (type(release_id) is not int or release_id <= 0
+            or release.get('url') != f'https://api.github.com/repos/{REPOSITORY}/releases/{release_id}'
+            or release.get('tag_name') != tag or release.get('target_commitish') != source_sha
+            or release.get('draft') is not draft or release.get('prerelease') is not False):
+        raise ValueError('GitHub release identity/state/source read-back mismatch')
+    return release_id
+
+
+def verify_release(release_id, report, source_sha, *, draft):
+    import hashlib
+    import urllib.request
+    release = github('releases/' + str(release_id))
+    if release_identity(release, report['tag'], source_sha, draft) != release_id:
+        raise ValueError('GitHub release ID mismatch')
+    assets = release.get('assets', [])
+    if len(assets) != 1:
+        raise ValueError('expected exactly one qualified asset')
+    asset = assets[0]
+    asset_id = asset.get('id')
+    canonical = f'https://github.com/{REPOSITORY}/releases/download/{report["tag"]}/{report["filename"]}'
+    url = asset.get('browser_download_url', '')
+    draft_url = re.fullmatch(r'https://github\.com/' + re.escape(REPOSITORY) +
+                             r'/releases/download/untagged-[A-Za-z0-9-]+/' + re.escape(report['filename']), url)
+    if (type(asset_id) is not int or asset_id <= 0
+            or asset.get('url') != f'https://api.github.com/repos/{REPOSITORY}/releases/assets/{asset_id}'
+            or asset.get('name') != report['filename'] or asset.get('size') != report['size']
+            or asset.get('digest') != 'sha256:' + report['sha256']
+            or not (url == canonical or (draft and draft_url))):
+        raise ValueError('GitHub uploaded asset name/size/digest/owner URL mismatch; do not publish')
+    # Read authenticated draft bytes by exact asset ID, not its temporary URL.
+    if draft:
+        data = subprocess.run(['gh', 'api', '--hostname', 'github.com',
+                              f'repos/{REPOSITORY}/releases/assets/{asset_id}',
+                              '-H', 'Accept: application/octet-stream'], check=True, capture_output=True).stdout
+    else:
+        with urllib.request.urlopen(canonical, timeout=60) as response:
+            data = response.read(report['size'] + 1)
+    if len(data) != report['size'] or hashlib.sha256(data).hexdigest() != report['sha256']:
+        raise ValueError('downloaded asset bytes/hash mismatch')
+    # Read only: verification must never repair an absent tag.
+    ref = github('git/ref/tags/' + report['tag'])
+    obj = ref.get('object', {}) if ref else {}
+    for _ in range(4):
+        if obj.get('type') != 'tag':
+            break
+        annotation = github('git/tags/' + obj['sha'])
+        obj = annotation.get('object', {}) if annotation else {}
+    if obj.get('type') != 'commit' or obj.get('sha') != source_sha:
+        raise ValueError('GitHub tag does not resolve to qualified source SHA')
+    return release
+
+
+def publish_verified(release_id, report, source_sha):
+    github('releases/' + str(release_id), method='PATCH',
+           fields={'draft': False, 'prerelease': False, 'make_latest': 'true'})
+    verify_release(release_id, report, source_sha, draft=False)
+    latest = github('releases/latest')
+    if release_identity(latest, report['tag'], source_sha, False) != release_id:
+        raise ValueError('published release was not confirmed at GitHub /latest')
+
+
+def recover_release(version, firmware, source_sha, *, release_id, publish=False):
+    """Publish-only recovery: qualified local bytes, exact existing draft, no upload/build/tag mutation."""
+    if not publish or type(release_id) is not int or release_id <= 0:
+        raise ValueError('recovery requires explicit publication approval and positive release ID')
+    report = validate_release(firmware, version)
+    verify_release(release_id, report, source_sha, draft=True)
+    latest = github('releases/latest')
+    if latest is not None:
+        old = validate_version(latest.get('tag_name', '').removeprefix('crosscub-v'))
+        def numeric(v):
+            values = [int(x) for x in v.split('.')]
+            return tuple(values + [0] * (4-len(values)))
+        if not latest.get('tag_name', '').startswith('crosscub-v') or numeric(version) <= numeric(old):
+            raise ValueError('recovery must be newer than stable /latest')
+    publish_verified(release_id, report, source_sha)
     return report
 
 
@@ -166,11 +242,16 @@ def main():
     parser.add_argument('version', nargs='?')
     parser.add_argument('--ci-check', action='store_true', help='CI: check owner/source/version/remote release before building')
     parser.add_argument('--ci-upload', type=Path, help='CI: qualify and upload this artifact; draft unless explicitly approved')
+    parser.add_argument('--ci-recover-id', type=int, help='Explicit publish-only recovery of this exact existing draft ID; requires --ci-upload qualified local bytes and owner --publish')
     parser.add_argument('--publish', action='store_true', help='Print owner command selecting stable /latest publication; default is draft')
     parser.add_argument('--write-version', action='store_true', help='Explicitly update both tracked version fields; does not commit/tag/push')
     parser.add_argument('--config', type=Path, default=Path(__file__).resolve().parents[1] / 'platformio.ini')
     args = parser.parse_args()
     try:
+        if args.ci_recover_id is not None and (not args.ci_upload or args.ci_check):
+            raise ValueError('recovery requires --ci-upload and forbids --ci-check')
+        if args.ci_check and args.ci_upload:
+            raise ValueError('select exactly one CI operation')
         if args.ci_check or args.ci_upload:
             if os.environ.get('GITHUB_ACTIONS') != 'true' or args.write_version:
                 raise ValueError('CI mode requires GitHub Actions and forbids changing source versions')
@@ -185,7 +266,11 @@ def main():
                            ref=ref, actor=os.environ.get('GITHUB_ACTOR', ''), publish=publish,
                            source_sha=os.environ.get('GITHUB_SHA', ''))
             if args.ci_upload:
-                report = upload_release(version, args.ci_upload, os.environ['GITHUB_SHA'], publish=publish)
+                if args.ci_recover_id is not None:
+                    report = recover_release(version, args.ci_upload, os.environ['GITHUB_SHA'],
+                                             release_id=args.ci_recover_id, publish=publish)
+                else:
+                    report = upload_release(version, args.ci_upload, os.environ['GITHUB_SHA'], publish=publish)
                 print(json.dumps(report, indent=2))
             else:
                 proceed = check_remote(version, skip_published=True)

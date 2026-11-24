@@ -7,8 +7,8 @@ class Status(unittest.TestCase):
         workflow = (Path(__file__).resolve().parents[3]/'.github/workflows/ci.yml').read_text()
         gate = workflow.split('  test-status:', 1)[1]
         self.assertIn('if: always()', gate)
-        self.assertIn('needs: [build, clang-format, cppcheck, required-tests]', gate)
-        mapping = dict(BUILD='build', FORMAT='clang-format', ANALYZER='cppcheck', TESTS='required-tests')
+        self.assertIn('needs: [build, clang-format, cppcheck, required-tests, portable-policy]', gate)
+        mapping = dict(BUILD='build', FORMAT='clang-format', ANALYZER='cppcheck', TESTS='required-tests', PORTABLE='portable-policy')
         for key, job in mapping.items():
             self.assertIn(key + ': ${{ needs.' + job + '.result }}', gate)
         script = textwrap.dedent(gate.split('        run: |\n')[1])

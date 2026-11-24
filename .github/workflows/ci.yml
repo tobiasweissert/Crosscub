@@ -10,6 +10,12 @@ on:
         description: Non-distributing cold Sticky qualification (no publication)
         type: boolean
         default: false
+      build_jobs:
+        description: Nonpublishing benchmark workers (compare 1 and 2 on the same source/cache state)
+        type: choice
+        options: ["1", "2"]
+        default: "1"
+        required: true
       environment:
         description: Non-distributing build environment
         type: choice
@@ -32,7 +38,6 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          submodules: recursive
           persist-credentials: false
 
       - uses: actions/setup-python@v6
@@ -40,16 +45,11 @@ jobs:
           python-version: "3.14"
 
       - name: Install clang-format-21
-        run: |
-          wget https://apt.llvm.org/llvm.sh
-          chmod +x llvm.sh
-          sudo ./llvm.sh 21
-          sudo apt-get update
-          sudo apt-get install -y clang-format-21
+        run: python3 -m pip install "clang-format==21.1.8"
 
       - name: Run clang-format
         run: |
-          PATH="/usr/lib/llvm-21/bin:$PATH" ./bin/clang-format-fix
+          ./bin/clang-format-fix
           git diff --exit-code || (echo "Please run 'bin/clang-format-fix' to fix formatting issues" && exit 1)
 
   cppcheck:
@@ -74,8 +74,12 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v7
         with:
-          version: "latest"
+          version: "0.13.9"
           enable-cache: true
+
+      - name: Identify mutable PlatformIO cache compatibility
+        id: pio-cache
+        run: python3 scripts/pio_cache_identity.py
 
       - name: Cache PlatformIO packages
         uses: actions/cache@v4
@@ -85,7 +89,7 @@ jobs:
           path: |
             ~/.platformio/packages
             ~/.platformio/platforms
-          key: ubuntu24-cppcheck-${{ runner.arch }}-platformio-py3.14-core6.1.19-${{ hashFiles('platformio.ini', 'platformio.local.example.ini') }}
+          key: ubuntu24-cppcheck-${{ runner.os }}-${{ runner.arch }}-mutable-v2-${{ steps.pio-cache.outputs.identity }}
 
       - name: Install PlatformIO Core
         run: uv pip install --system -U https://github.com/pioarduino/platformio-core/archive/refs/tags/v6.1.19.zip
@@ -144,6 +148,26 @@ jobs:
           retention-days: 31
           compression-level: 0
 
+  portable-policy:
+    # Independent early feedback: never blocks firmware evidence retention.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+      - name: Install portable test prerequisites only
+        run: python3 -m pip install "pioarduino==6.1.19" "SCons==4.8.1"
+      - name: Check portable docs and workflow policy
+        run: python3 -m unittest discover -s test/crosspoint_migration/docs-ci -v
+      - name: Release tooling regression tests (synthetic images, never firmware)
+        run: python3 -m unittest discover -s test/ota_release -v
+
   build:
     # Standard Sticky uses approved packing; the manual compatibility alias is equivalent.
     # Neither environment publishes or authorizes hardware execution.
@@ -155,6 +179,7 @@ jobs:
         environment: ["${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'sticky' }}"]
     env:
       PIO_ENV: ${{ matrix.environment }}
+      BUILD_JOBS: ${{ github.event_name == 'workflow_dispatch' && inputs.build_jobs || '1' }}
       COLD_QUALIFICATION: ${{ github.event_name == 'workflow_dispatch' && inputs.cold_qualification == true }}
     steps:
       - name: Validate selected build environment
@@ -162,6 +187,14 @@ jobs:
           set -euo pipefail
           if test "${COLD_QUALIFICATION:-false}" = true && test "$PIO_ENV" != sticky; then
             printf '%s\n' 'Cold qualification requires exact sticky environment' >&2
+            exit 1
+          fi
+          case "$BUILD_JOBS" in
+            1|2) ;;
+            *) printf '%s\n' 'Invalid worker count' >&2; exit 1 ;;
+          esac
+          if test "${COLD_QUALIFICATION:-false}" = true && test "$BUILD_JOBS" != 1; then
+            printf '%s\n' 'Cold qualification requires one worker' >&2
             exit 1
           fi
           case "$PIO_ENV" in
@@ -181,8 +214,12 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v7
         with:
-          version: "latest"
+          version: "0.13.9"
           enable-cache: true
+
+      - name: Identify mutable PlatformIO cache compatibility
+        id: pio-cache
+        run: python3 scripts/pio_cache_identity.py
 
       - name: Cache PlatformIO packages
         if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.cold_qualification == true) }}
@@ -193,7 +230,7 @@ jobs:
           path: |
             ~/.platformio/packages
             ~/.platformio/platforms
-          key: ${{ runner.os }}-platformio-py3.14-core6.1.19-${{ matrix.environment }}-${{ hashFiles('platformio.ini', 'platformio.local.example.ini') }}
+          key: firmware-${{ runner.os }}-${{ runner.arch }}-mutable-v2-${{ steps.pio-cache.outputs.identity }}
 
       - name: Install PlatformIO Core
         run: uv pip install --system -U https://github.com/pioarduino/platformio-core/archive/refs/tags/v6.1.19.zip
@@ -274,7 +311,11 @@ jobs:
           export CROSSCUB_PROJECT_SCRIPTS="$GITHUB_WORKSPACE/scripts"
           : > "pio-$PIO_ENV.log"
           python3 scripts/ci_producer_capture.py --producer "$HOME/.platformio/platforms/espressif32/builder/frameworks/espidf.py" > "pio-$PIO_ENV.log" 2>&1
-          pio run --verbose -j1 -e "$PIO_ENV" >> "pio-$PIO_ENV.log" 2>&1
+          # GNU time reports largest process RSS, NOT aggregate concurrent memory.
+          printf 'workers=%s\n' "$BUILD_JOBS" > sticky-evidence/build-resources.txt
+          command time -a -o sticky-evidence/build-resources.txt \
+            -f 'elapsed_seconds=%e\nmax_process_rss_kib=%M\nexit_code=%x' \
+            pio run --verbose "-j$BUILD_JOBS" -e "$PIO_ENV" >> "pio-$PIO_ENV.log" 2>&1
 
       - name: Stage exact Sticky BIN ELF and provenance
         if: always() && steps.firmware.outcome != 'skipped'
@@ -453,11 +494,6 @@ jobs:
           retention-days: 31
           compression-level: 0
 
-      # Keep portable diagnostics after real compilation and evidence retention.
-      # A harness portability defect must not prevent the first firmware build.
-      - name: Check portable docs and workflow policy
-        run: python3 -m unittest discover -s test/crosspoint_migration/docs-ci -v
-
       - name: Extract firmware stats
         run: |
           echo 'Firmware size diagnostics remain private.' >> "$GITHUB_STEP_SUMMARY"
@@ -481,7 +517,7 @@ jobs:
   test-status:
     name: Test Status
     if: always()
-    needs: [build, clang-format, cppcheck, required-tests]
+    needs: [build, clang-format, cppcheck, required-tests, portable-policy]
     runs-on: ubuntu-latest
     steps:
       - name: Require exact mandatory job results
@@ -492,9 +528,10 @@ jobs:
           FORMAT: ${{ needs.clang-format.result }}
           ANALYZER: ${{ needs.cppcheck.result }}
           TESTS: ${{ needs.required-tests.result }}
+          PORTABLE: ${{ needs.portable-policy.result }}
         run: |
           set -eu
-          test "$FORMAT:$ANALYZER" = success:success
+          test "$FORMAT:$ANALYZER:$PORTABLE" = success:success:success
           case "$EVENT" in
             push) test "$REF:$BUILD:$TESTS" = refs/heads/main:skipped:skipped ;;
             workflow_dispatch|pull_request|workflow_call) test "$BUILD:$TESTS" = success:success ;;

@@ -365,7 +365,7 @@ runpy.run_path(sys.argv[0], run_name='__main__')
                 self.assertEqual(result.returncode, rc, raw)
                 counts = ('counts=unavailable' if blocking is None else
                     f'blocking={blocking}; report-only information: checkersReport=1, '
-                    f'normalCheckLevelMaxBranches={coverage}; tool_completed={complete}')
+                    f'normalCheckLevelMaxBranches={coverage}; baselined=0; tool_completed={complete}')
                 self.assertEqual((root/'summary').read_text(),
                                  f'Cppcheck: {counts}; command_exit={rc}\n')
                 if mode == 'exception':

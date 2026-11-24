@@ -27,8 +27,9 @@ class Policy(unittest.TestCase):
         self.assertIn('toolchain-manifest.json', text)
         self.assertLess(text.index('name: Seal exact Sticky evidence'), text.index('name: Retain encrypted Sticky evidence'))
         self.assertLess(text.index('name: Retain encrypted Sticky evidence'), text.index('name: Extract firmware stats'))
-        self.assertLess(text.index('name: Retain encrypted Sticky evidence'),
-                        text.index('name: Check portable docs and workflow policy'))
+        portable = text.split('  portable-policy:', 1)[1].split('  build:', 1)[0]
+        self.assertNotIn('needs:', portable)
+        self.assertIn('name: Check portable docs and workflow policy', portable)
         self.assertNotIn('github.event.repository.private', text)
         self.assertIn('vars.CROSSCUB_ARTIFACT_RECIPIENT_CERT', text)
         self.assertIn("if: always() && steps.seal.outcome == 'success'", text)
@@ -68,8 +69,8 @@ class Policy(unittest.TestCase):
         text = (ROOT / '.github/workflows/ci.yml').read_text()
         build = text.split('      - name: Build ${{ matrix.environment }} firmware', 1)[1]
         build = build.split('      - name: Stage exact Sticky BIN ELF and provenance', 1)[0]
-        commands = re.findall(r'(?m)^          pio run .+$', build)
-        self.assertEqual(commands, ['          pio run --verbose -j1 -e "$PIO_ENV" >> "pio-$PIO_ENV.log" 2>&1'])
+        commands = re.findall(r'(?m)^            pio run .+$', build)
+        self.assertEqual(commands, ['            pio run --verbose "-j$BUILD_JOBS" -e "$PIO_ENV" >> "pio-$PIO_ENV.log" 2>&1'])
         analyzer = text.split('      - name: Run cppcheck', 1)[1].split('      - name: Seal analyzer', 1)[0]
         self.assertIn('python3 scripts/ci_cppcheck_capture.py check --verbose --fail-on-defect low --fail-on-defect medium --fail-on-defect high > cppcheck-evidence/check.log 2>&1', analyzer)
         self.assertNotIn('continue-on-error', analyzer)

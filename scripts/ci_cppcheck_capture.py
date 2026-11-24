@@ -7,6 +7,56 @@ import sys
 
 
 PROBE_TIMEOUT = 60
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def load_baseline(path):
+    """Reject malformed policy rather than silently broadening debt acceptance."""
+    import json
+    import re
+    document = json.loads(path.read_text())
+    if not isinstance(document, dict) or document.get('schema') != 1 or not isinstance(document.get('findings'), list):
+        raise ValueError('invalid analyzer baseline')
+    rows = document['findings']
+    seen = set()
+    for row in rows:
+        if (not isinstance(row, list) or len(row) != 6
+                or not isinstance(row[0], str) or not row[0]
+                or Path(row[0]).is_absolute() or '..' in Path(row[0]).parts
+                or Path(row[0]).as_posix() != row[0]
+                or type(row[1]) is not int or row[1] <= 0
+                or not isinstance(row[2], str) or not isinstance(row[3], str)
+                or not row[3] or type(row[4]) is not int or row[4] not in (2, 4)
+                or not isinstance(row[5], str) or not re.fullmatch('[0-9a-f]{64}', row[5])):
+            raise ValueError('invalid analyzer baseline finding')
+        key = tuple(row[:5])
+        if key in seen:
+            raise ValueError('duplicate analyzer baseline finding')
+        seen.add(key)
+    return rows
+
+
+def is_baselined(defect, baseline, root=ROOT):
+    """Accept only an exact authenticated parser tuple on unchanged reviewed source."""
+    import hashlib
+    if not (getattr(defect, '_crosscub_raw_verified', False)
+            and getattr(defect, '_crosscub_location_verified', False)):
+        return False
+    path = Path(defect.file)
+    if path.is_absolute() or '..' in path.parts or path.as_posix() != defect.file:
+        return False
+    key = [defect.file, defect.line, defect.category, defect.id, defect.severity]
+    candidates = [row for row in baseline if row[:5] == key]
+    if not candidates:
+        return False
+    try:
+        source = root/path
+        source.resolve().relative_to(root.resolve())
+        digest = hashlib.sha256(source.read_bytes()).hexdigest()
+    except (OSError, ValueError):
+        return False
+    return any(row[5] == digest for row in candidates)
+
 
 
 def capture_execute(original, tool, command):
@@ -114,6 +164,13 @@ def checked_command(original, tool, command):
                     defect = tool.get_defects()[-1]
                     if raw == (defect.category, defect.id):
                         defect._crosscub_raw_verified = True
+                        record = (pending + line).strip().strip(chr(34))
+                        fields = dict(field.split('=', 1) for field in record.split(delimiter))
+                        raw_path = Path(fields['file'])
+                        parsed_path = Path(defect.file)
+                        defect._crosscub_location_verified = (
+                            raw_path.resolve() == parsed_path.resolve() and
+                            fields['line'] == str(defect.line))
                     else:
                         valid = False
             except BaseException:
@@ -134,6 +191,7 @@ def checked_command(original, tool, command):
 
 
 def run_core(totals):
+    baseline = load_baseline(ROOT/'scripts/cppcheck-baseline.json')
     from importlib import import_module
     from unittest.mock import patch
     from platformio.check.defect import DefectItem
@@ -171,13 +229,15 @@ def run_core(totals):
             raise RuntimeError('unmatched cppcheck result')
         completed = pending[1]
         pending = None
-        notices = {'checkersReport': 0, 'normalCheckLevelMaxBranches': 0}
+        notices = {'checkersReport': 0, 'normalCheckLevelMaxBranches': 0, 'baselined': 0}
         blocking = 0
         for defect in defects:
             if (getattr(defect, '_crosscub_raw_verified', False)
                     and defect.category == 'information' and defect.severity == DefectItem.SEVERITY_LOW
                     and defect.id in notices):
                 notices[defect.id] += 1
+            elif is_baselined(defect, baseline):
+                notices['baselined'] += 1
             else:
                 blocking += 1
         if blocking or not completed:
@@ -215,6 +275,7 @@ def main():
                 counts = (f'blocking={blocking}; report-only information: ' + ', '.join(
                     f'{key}={sum(n[key] for _, n, _ in totals)}'
                     for key in ('checkersReport', 'normalCheckLevelMaxBranches')) +
+                    f'; baselined={sum(n["baselined"] for _, n, _ in totals)}' +
                     f'; tool_completed={all(done for _, _, done in totals)}')
             try:
                 with open(summary, 'a', encoding='utf-8') as stream:

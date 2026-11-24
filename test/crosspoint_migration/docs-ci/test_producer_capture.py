@@ -158,8 +158,8 @@ class ProducerTests(unittest.TestCase):
         import sys
         import subprocess
         import textwrap
-        scons = Path.home()/'.platformio/packages/tool-scons/scons.py'
-        self.assertTrue(scons.is_file(), 'pinned real SCons required; no mocked executor')
+        import SCons
+        self.assertEqual(SCons.__version__, '4.8.1')
         with tempfile.TemporaryDirectory(dir=os.environ.get('TMPDIR')) as temp:
             root = Path(temp)
             (root/'src').mkdir()
@@ -207,7 +207,7 @@ class ProducerTests(unittest.TestCase):
             # Project SConscript import resolves through PROJECT_DIR, no __file__.
             (root/'scripts').symlink_to(ROOT/'scripts',target_is_directory=True)
             (root/'SConstruct').write_text('HELPER='+repr(str(HELPER))+'\nLTO='+repr(str(ROOT/'scripts/sticky_project_lto_pre.py'))+'\n'+program)
-            result = subprocess.run([sys.executable,str(scons),'-Q'],cwd=root,
+            result = subprocess.run([sys.executable,'-m','SCons','-Q'],cwd=root,
                 env=dict(os.environ,CROSSCUB_PRIVATE_EVIDENCE=str(root/'evidence')),
                 capture_output=True,text=True,timeout=30)
             self.assertEqual(result.returncode,0,result.stdout+result.stderr)

@@ -214,15 +214,15 @@ class Workflow(unittest.TestCase):
         self.assertLess(build.index('scripts/check_sticky_cold_state.py coherent'), build.index('pio run --verbose'))
         self.assertLess(build.index('seal_ci_artifacts.py validate-cert'), build.index('pio run --verbose'))
         frozen = {
-            'Build ${{ matrix.environment }} firmware': '483c9fd765d7c1a3e67f59032d15c0dbe229e5f2612b1d68a92d5e86393040cb',
+            'Build ${{ matrix.environment }} firmware': 'bdb1c3aadcbfd630351661ceff4d317880e0349d5d0b5a841b3017058a80db0e',
             'Stage exact Sticky BIN ELF and provenance': '25c88ced542ad2a90e7adeb9d7d7aff202ac78c651de5e8830072a5d53139e76',
             'Seal exact Sticky evidence including failed-build diagnostics': '008fdbf9069325a6dadebe9232b78a07ddb1cb06c8c4fda2cdf59d7ec13784c7',
-            'Retain encrypted Sticky evidence': '46dd631d14dc94c5d87e899741efb1007d10e850b2c3d0d21b9b43239f08fb8f',
+            'Retain encrypted Sticky evidence': '495609724997fc2eec46146902835a4d740b5b94d80e6aee8d7dee859b31b47a',
             'Require recipient-encrypted artifact retention': '7e5b077917b0ec672ee31a8c81329c12d4c00d609276d645cc6f2f2f9adadbc0'}
         for name, expected in frozen.items():
             self.assertEqual(hashlib.sha256(self.blocks()[name].encode()).hexdigest(), expected, name)
-        cppcheck = text.split('  cppcheck:\n')[1].split('  build:\n')[0]
-        self.assertEqual(hashlib.sha256(cppcheck.encode()).hexdigest(), 'e71cf795dc6dd7ee389ee8e52d07f53156245b874bd18ada184d3f32b373c454')
+        cppcheck = text.split('  cppcheck:\n')[1].split('  portable-policy:\n')[0]
+        self.assertEqual(hashlib.sha256(cppcheck.encode()).hexdigest(), '26fc272a63a5ae2b6ce29f2abc4c7a58118aa7f752643c496d61db32b370b19c')
 
     def test_actual_fresh_coherent_shell_blocks_with_synthetic_home(self):
         import subprocess
@@ -291,13 +291,18 @@ class Workflow(unittest.TestCase):
             (tools / 'git').write_text('#!/bin/sh\nexit 0\n')
             for path in tools.iterdir():
                 path.chmod(0o700)
-            env = {**os.environ, 'PATH': str(tools) + os.pathsep + os.environ['PATH'], 'HOME': str(root), 'PIO_ENV': 'sticky', 'GITHUB_WORKSPACE': str(root), 'RUNNER_TEMP': str(root), 'GITHUB_REPOSITORY': 'tobiasweissert/Crosscub', 'GITHUB_SHA': 'a' * 40, 'GITHUB_RUN_ID': '1', 'GITHUB_RUN_ATTEMPT': '1'}
+            env = {**os.environ, 'PATH': str(tools) + os.pathsep + os.environ['PATH'], 'HOME': str(root), 'PIO_ENV': 'sticky', 'BUILD_JOBS': '1', 'GITHUB_WORKSPACE': str(root), 'RUNNER_TEMP': str(root), 'GITHUB_REPOSITORY': 'tobiasweissert/Crosscub', 'GITHUB_SHA': 'a' * 40, 'GITHUB_RUN_ID': '1', 'GITHUB_RUN_ATTEMPT': '1'}
             def run(name, **extra):
                 return subprocess.run(['bash', '-c', self.script(name)], cwd=root, env={**env, **extra}, capture_output=True)
             for capture, expected in [('37', 37), ('0', 23)]:
                 result = run('Build ${{ matrix.environment }} firmware', SYNTHETIC_CAPTURE_EXIT=capture)
                 self.assertEqual(result.returncode, expected)
                 self.assertNotIn(b'PRIVATE_SYNTHETIC_BUILD_CANARY', result.stdout + result.stderr)
+            measurements = (root/'sticky-evidence/build-resources.txt').read_text()
+            self.assertIn('workers=1', measurements)
+            self.assertIn('elapsed_seconds=', measurements)
+            self.assertIn('max_process_rss_kib=', measurements)
+            self.assertIn('exit_code=23', measurements)
             build = root / '.pio/build/sticky'
             build.mkdir(parents=True)
             for name in ('firmware.elf', 'firmware.bin', 'firmware.map'):
@@ -327,12 +332,17 @@ class Workflow(unittest.TestCase):
         block = textwrap.dedent(block)
         for flag, environment, expected in [('true', 'sticky', 0), ('true', 'sticky-static-builtins-experimental', 1), ('true', 'invalid', 1), ('false', 'sticky', 0), ('false', 'sticky-static-builtins-experimental', 0), ('false', 'invalid', 1), (None, 'sticky', 0), (None, 'sticky-static-builtins-experimental', 0)]:
             with self.subTest(flag=flag, environment=environment):
-                env = {**os.environ, 'PIO_ENV': environment}
+                env = {**os.environ, 'PIO_ENV': environment, 'BUILD_JOBS': '1'}
                 env.pop('COLD_QUALIFICATION', None)
                 if flag is not None:
                     env['COLD_QUALIFICATION'] = flag
                 result = subprocess.run(['bash', '-c', block], env=env, capture_output=True)
                 self.assertEqual(result.returncode, expected)
+        for cold, jobs, expected in [('true', '2', 1), ('false', '2', 0),
+                                     ('false', '3', 1), ('false', '', 1), ('false', '1;echo BAD', 1)]:
+            result = subprocess.run(['bash', '-c', block], env={**os.environ,
+                'PIO_ENV': 'sticky', 'COLD_QUALIFICATION': cold, 'BUILD_JOBS': jobs}, capture_output=True)
+            self.assertEqual(result.returncode, expected, (cold, jobs, result.stderr))
 
 
 if __name__ == '__main__':

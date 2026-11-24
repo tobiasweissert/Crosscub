@@ -147,11 +147,11 @@ class PublicationTests(unittest.TestCase):
             with patch.object(prep, 'github', return_value=existing), self.assertRaises(ValueError):
                 prep.check_remote('1.6.5.4')
         for latest in ['crosscub-v1.6.5.4', 'crosscub-v1.6.5.5', 'v99', 'crosscub-v1-rc']:
-            with patch.object(prep, 'github', side_effect=[None, {'tag_name': latest}]), self.assertRaises(ValueError):
+            with patch.object(prep, 'github', side_effect=[None, [], {'tag_name': latest}]), self.assertRaises(ValueError):
                 prep.check_remote('1.6.5.4')
-        with patch.object(prep, 'github', side_effect=[None, {'tag_name': 'crosscub-v1.6.5.3'}]):
+        with patch.object(prep, 'github', side_effect=[None, [], {'tag_name': 'crosscub-v1.6.5.3'}]):
             prep.check_remote('1.6.5.4')
-        with patch.object(prep, 'github', side_effect=[None, None]):
+        with patch.object(prep, 'github', side_effect=[None, [], None]):
             prep.check_remote('1.6.5.4')
 
 
@@ -163,31 +163,33 @@ class PublicationTests(unittest.TestCase):
             path = Path(tmp) / 'crosscub-sticky-v1.6.5.4.bin'
             data = synthetic_image(); path.write_bytes(data)
             sha = 'a' * 40
-            base = {'tag_name': 'crosscub-v1.6.5.4', 'draft': True, 'prerelease': False,
-                    'assets': [{'name': path.name, 'size': len(data),
+            base = {'id': 42, 'url': 'https://api.github.com/repos/tobiasweissert/Crosscub/releases/42',
+                    'target_commitish': sha, 'tag_name': 'crosscub-v1.6.5.4', 'draft': True, 'prerelease': False,
+                    'assets': [{'id': 7, 'url': 'https://api.github.com/repos/tobiasweissert/Crosscub/releases/assets/7', 'name': path.name, 'size': len(data),
                                 'digest': 'sha256:' + hashlib.sha256(data).hexdigest(),
                                 'browser_download_url': 'https://github.com/tobiasweissert/Crosscub/releases/download/crosscub-v1.6.5.4/' + path.name}]}
             for publish in [False, True]:
                 calls = []
-                def api(endpoint):
-                    calls.append(('api', endpoint))
+                def api(endpoint, **kwargs):
+                    calls.append(('api', endpoint, kwargs))
                     if endpoint.startswith('git/ref/'):
                         return {'object': {'type': 'commit', 'sha': sha}}
                     if endpoint == 'releases/latest':
                         return {**base, 'draft': False}
-                    return {**base, 'draft': not any(c[0] == 'cmd' and 'edit' in c[1] for c in calls)}
-                with patch.object(prep, 'check_remote') as guard, patch.object(prep, 'github', side_effect=api), patch.object(prep, 'release_command', side_effect=lambda args: calls.append(('cmd', args))):
+                    return {**base, 'draft': not any(c[2].get('method') == 'PATCH' for c in calls)}
+                with patch.object(prep, 'check_remote') as guard, patch.object(prep, 'github', side_effect=api), patch.object(prep.subprocess, 'run', return_value=type('R', (), {'stdout': data})()), patch('urllib.request.urlopen') as download:
+                    download.return_value.__enter__.return_value.read.return_value = data
                     prep.upload_release('1.6.5.4', path, sha, publish=publish)
                     guard.assert_called_once()
-                commands = [c[1] for c in calls if c[0] == 'cmd']
-                self.assertIn('--draft', commands[0])
-                self.assertIn('--repo', commands[0]); self.assertIn('tobiasweissert/Crosscub', commands[0])
-                self.assertEqual(len(commands), 2 if publish else 1)
+                writes = [c for c in calls if c[2].get('fields')]
+                self.assertEqual(writes[0][1], 'releases')
+                self.assertIs(writes[0][2]['fields']['draft'], True)
+                self.assertEqual(len(writes), 2 if publish else 1)
                 if publish:
-                    self.assertIn('--latest', commands[1])
-                    self.assertIn('--draft=false', commands[1])
+                    self.assertEqual(writes[1][1], 'releases/42')
+                    self.assertEqual(writes[1][2]['fields'], {'draft': False, 'prerelease': False, 'make_latest': 'true'})
             bad = {**base, 'assets': [{**base['assets'][0], 'digest': 'sha256:' + '0'*64}]}
-            with patch.object(prep, 'check_remote'), patch.object(prep, 'github', side_effect=[{'object': {'type': 'commit', 'sha': sha}}, bad]), patch.object(prep, 'release_command') as command:
+            with patch.object(prep, 'check_remote'), patch.object(prep, 'github', side_effect=[{'object': {'type': 'commit', 'sha': sha}}, base, bad]), patch.object(prep.subprocess, 'run') as command:
                 with self.assertRaises(ValueError):
                     prep.upload_release('1.6.5.4', path, sha, publish=True)
                 self.assertEqual(command.call_count, 1, 'bad uploaded asset must remain draft, never publish')
