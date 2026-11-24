@@ -89,7 +89,9 @@ end
 function G.button(text,b,fill,outline,paper)
  if fill~=nil then smudge.rect(b.x,b.y,b.w,b.h,true,fill)end
  if outline then smudge.rect(b.x,b.y,b.w,b.h,false,1,not paper)end
- G.native(text,{x=b.x+4,y=b.y+2,w=b.w-8,h=b.h-4},20,'center',paper)
+ local size=10
+ for _,candidate in ipairs({20,14,10})do if G.nativeWidth(text,candidate)<=b.w-8 then size=candidate;break end end
+ G.native(text,{x=b.x+4,y=b.y+2,w=b.w-8,h=b.h-4},size,'center',paper)
 end
 function G.roundDither(x,y,w,h,r,dark)
  r=math.min(r,w//2,h//2)

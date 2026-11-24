@@ -68,7 +68,10 @@ function G.slot(x,y,w,h)
  for yy=y+8,y+h-9,20 do local n=math.min(10,y+h-8-yy);smudge.rect(x,yy,2,n,true,true);smudge.rect(x+w-2,yy,2,n,true,true)end
 end
 function G.buttonText(text,b,paper)
- text=G.fit(text,b.w-8,20)
- G.text(text,b.x+4+(b.w-8-G.inkWidth(text,20))//2,b.y+2+math.max(0,(b.h-4-42)//2)+9,20,paper)
+ -- Actions must remain readable in narrow portrait controls, never ellipsized.
+ local size=G.inkWidth(text,20)<=b.w-8 and 20 or 10
+ local cap=size==20 and 25 or 13
+ local top=size==20 and b.y+2+math.max(0,(b.h-4-42)//2)+9 or b.y+(b.h-cap)//2
+ G.text(text,b.x+4+(b.w-8-G.inkWidth(text,size))//2,top,size,paper)
 end
 return G

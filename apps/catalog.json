@@ -435,7 +435,7 @@
     {
       "id": "solitaire",
       "name": "Solitaire",
-      "version": "1.1.1",
+      "version": "1.1.2",
       "author": "Mumfee",
       "description": "CrossPlay Solitaire on Sticky; original game and saves unchanged on other devices",
       "files": [
@@ -1240,7 +1240,7 @@
     {
       "id": "cp-yahtzee",
       "name": "Yahtzee",
-      "version": "0.1.4",
+      "version": "0.1.5",
       "author": "CrossPlay contributors; Lua port",
       "description": "Local Yahtzee with Joker/bonus rules and opponent; no Nearby.",
       "files": [
@@ -1352,7 +1352,7 @@
     {
       "id": "cp-seasalt",
       "name": "Sea Salt",
-      "version": "0.1.4",
+      "version": "0.1.5",
       "author": "CrossPlay contributors; Lua port",
       "description": "58-card local Sea Salt with duo effects, Stop/Last Chance and saved matches.",
       "files": [

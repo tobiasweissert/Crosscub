@@ -25,12 +25,11 @@ function G.inkWidth(text,size)
  return right-left
 end
 function G.status(text,b,disabled)
- if G.inkWidth(text,20)>b.w-8 then local prefix=text;repeat prefix=prefix:sub(1,-2)until #prefix==0 or G.inkWidth(prefix..'...',20)<=b.w-8;text=prefix..'...'end
- -- Original FreeInkUI button: 4px horizontal/2px vertical text inset,
- -- toybox_20 line advance 42, ascender 34 and capital top 25.
+ local size=G.inkWidth(text,20)<=b.w-8 and 20 or 10
+ local cap=size==20 and 25 or 13
  if disabled then smudge.rect_dither(b.x,b.y,b.w,b.h,true)else smudge.rect(b.x,b.y,b.w,b.h,true,true)end
- G.text(text,b.x+4+(b.w-8-G.inkWidth(text,20))//2,
-  b.y+2+math.max(0,(b.h-4-42)//2)+34-25,20,true)
+ local top=size==20 and b.y+2+math.max(0,(b.h-4-42)//2)+9 or b.y+(b.h-cap)//2
+ G.text(text,b.x+4+(b.w-8-G.inkWidth(text,size))//2,top,size,true)
 end
 function G.text(text,x,y,size,paper)
  local font=fonts[size];local cap=size==30 and 38 or size==20 and 25 or 13
