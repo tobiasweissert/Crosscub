@@ -1,7 +1,7 @@
 {
   "id": "flashcards",
   "name": "Flashcards",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "author": "CrossSmudge",
   "description": "Create and study question and answer cards.",
   "entry": "main.lua",

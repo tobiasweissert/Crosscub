@@ -5,7 +5,7 @@
     {
       "id": "flashcards",
       "name": "Flashcards",
-      "version": "0.1.2",
+      "version": "0.1.3",
       "author": "CrossSmudge",
       "description": "Create and study question and answer cards.",
       "min_api": 2,
@@ -13,6 +13,7 @@
         "core.lua",
         "editor.lua",
         "icon.raw",
+        "keyboard.lua",
         "main.lua",
         "manifest.json",
         "storage.lua",
@@ -23,7 +24,7 @@
     {
       "id": "habits",
       "name": "Habits",
-      "version": "0.1.2",
+      "version": "0.1.3",
       "author": "CrossSmudge",
       "description": "Daily habit checklists, streaks and sixteen weeks of history.",
       "min_api": 2,
@@ -31,6 +32,7 @@
         "core.lua",
         "editor.lua",
         "icon.raw",
+        "keyboard.lua",
         "main.lua",
         "manifest.json",
         "storage.lua",
@@ -41,7 +43,7 @@
     {
       "id": "pomodoro",
       "name": "Pomodoro",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "author": "CrossSmudge",
       "description": "Focus sessions with short and long breaks.",
       "min_api": 2,
@@ -50,6 +52,7 @@
         "digits.lua",
         "editor.lua",
         "icon.raw",
+        "keyboard.lua",
         "main.lua",
         "manifest.json",
         "numeric_sans.lua",
@@ -72,7 +75,7 @@
     {
       "id": "weather",
       "name": "Weather",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "author": "CrossSmudge",
       "description": "Current conditions and forecasts from Open-Meteo.",
       "min_api": 3,
@@ -83,6 +86,7 @@
         "forecast.lua",
         "icon.raw",
         "json.lua",
+        "keyboard.lua",
         "main.lua",
         "manifest.json",
         "model.lua",
@@ -94,7 +98,7 @@
     {
       "id": "browser",
       "name": "Browser",
-      "version": "0.3.5",
+      "version": "0.3.6",
       "author": "CrossSmudge",
       "description": "Public keyless Assisted reader with shared capacity, Direct/Offline modes, checked saves, links and search forms. Assisted needs public-mode firmware.",
       "min_api": 6,
@@ -107,6 +111,7 @@
         "editor.lua",
         "icon.raw",
         "json.lua",
+        "keyboard.lua",
         "layout.lua",
         "main.lua",
         "manifest.json",
@@ -187,7 +192,7 @@
     {
       "id": "wordle",
       "name": "Wordle",
-      "version": "1.2.1",
+      "version": "1.2.2",
       "author": "Mumfee",
       "description": "CrossPlay Wordle on Sticky; original game and saves unchanged on other devices",
       "files": [
@@ -224,6 +229,7 @@
         "enhanced.lua",
         "graphics.lua",
         "icon.raw",
+        "keypad.lua",
         "legacy_main.lua",
         "main.lua",
         "manifest.json",
@@ -250,7 +256,7 @@
     {
       "id": "sudoku",
       "name": "Sudoku",
-      "version": "1.1.1",
+      "version": "1.1.2",
       "author": "Mumfee",
       "description": "CrossPlay Sudoku on Sticky; original game and saves unchanged on other devices",
       "files": [
@@ -278,6 +284,7 @@
         "generator.lua",
         "graphics.lua",
         "icon.raw",
+        "keypad.lua",
         "legacy_main.lua",
         "main.lua",
         "manifest.json"
@@ -632,7 +639,7 @@
     {
       "id": "cp-calculator",
       "name": "Calculator",
-      "version": "0.1.4",
+      "version": "0.1.5",
       "author": "CrossPlay contributors; Lua port",
       "description": "Decimal calculator with contextual percent and repeated equals.",
       "files": [
@@ -666,6 +673,7 @@
         "enhanced.lua",
         "graphics.lua",
         "icon.raw",
+        "keypad.lua",
         "legacy_enhanced.lua",
         "legacy_graphics.lua",
         "main.lua",

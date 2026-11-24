@@ -1,5 +1,5 @@
 -- CrossPlay Sudoku screen geometry and Jersey masks; rules remain in app.lua.
-local F=dofile('graphics.lua')
+local F=dofile('graphics.lua');local K=dofile('keypad.lua')
 local V={level=0,focus=1,help=0,result=false,resultFocus=1}
 local levels={'EASY','MEDIUM','HARD','EXPERT'}
 local lessons={
@@ -174,8 +174,10 @@ local function drawBoard(l,g)
  end
  for d,b in ipairs(l.keys) do
   local count=0;if g.value then for _,value in ipairs(g.value) do if value==d then count=count+1 end end end
-  if count>=9 then smudge.rect_dither(b.x,b.y,b.w,b.h,false) end
-  frame(b.x,b.y,b.w,b.h,d==g.digit and 4 or 1);F.center(tostring(d),b.x,b.y,b.w,b.h,30)
+  if not K.paint(tostring(d),b,d==g.digit,0,count<9)then
+   if count>=9 then smudge.rect_dither(b.x,b.y,b.w,b.h,false) end
+   frame(b.x,b.y,b.w,b.h,d==g.digit and 4 or 1);F.center(tostring(d),b.x,b.y,b.w,b.h,30)
+  end
  end
  local label=g.job and 'MAKING ONE' or g.solved and 'SOLVED' or g.notice~='' and string.upper(g.notice) or empty..' LEFT'
  local font=F.width(label,20)>l.status.w-12 and 10 or 20

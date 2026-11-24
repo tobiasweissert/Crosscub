@@ -1,3 +1,4 @@
+local K=dofile('keypad.lua')
 local C=dofile('core.lua');local S=dofile('storage.lua')
 local g=C.new();local selected=1;local menu=false;local notice=''
 local keys={'AC','CE','BS','/', '7','8','9','*', '4','5','6','-', '1','2','3','+', '+/-','0','.','=', '%'}
@@ -21,9 +22,11 @@ function on_draw()
  else
   for i,k in ipairs(keys)do
    local x=left+(i-1)%4*cw;local y=top+(i-1)//4*ch
+   if not K.paint(k,{x=x,y=y,w=cw,h=ch},i==selected,0)then
    smudge.rect(x,y,cw,ch,false)
    if i==selected then smudge.rect(x+2,y+2,cw-4,ch-4,false,2) end
    smudge.text(x+cw//2-10,y+ch//2-8,k,'small')
+   end
   end
  end
  if notice~='' then smudge.text(left,h-85,notice,'small')end

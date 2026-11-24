@@ -1,7 +1,7 @@
 {
   "id": "habits",
   "name": "Habits",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "author": "CrossSmudge",
   "description": "Daily habit checklists, streaks and sixteen weeks of history.",
   "entry": "main.lua",

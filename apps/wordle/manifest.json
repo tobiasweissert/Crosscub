@@ -1,7 +1,7 @@
 {
   "id": "wordle",
   "name": "Wordle",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "author": "Mumfee",
   "description": "CrossPlay Wordle on Sticky; original game and saves unchanged on other devices",
   "entry": "main.lua"

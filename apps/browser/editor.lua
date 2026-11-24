@@ -1,5 +1,7 @@
 -- Loaded only while entering text; released on Done/Cancel.
+local K=dofile('keyboard.lua')
 return function(U)
+ if K.editor(U,true) then return end
  local e=U.editor;U.begin(e.title,'Back cancels')
  local kw=(U.w-16)//10;local kh=math.min(60,(U.bottom-U.top-90)//5)
  local y=U.bottom-5*(kh+4)

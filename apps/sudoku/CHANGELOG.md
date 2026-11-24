@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.1.2]
+
+### Fixed
+
+- Include the package-local keypad helper in Store installations. Preserve older-firmware fallback rendering; native key styling requires firmware support.
+
 ## [1.1.0] - 2026-11-15
 
 ### Changed

@@ -7,6 +7,7 @@ collectgarbage()
 local J=dofile('cp_journal.lua')
 local G={game=nil,menu=false,menuIndex=1,key=1,notice='',day=-1,results='',closed=false}
 local L={};local journal,resultJournal,sessionJournal;local dirty=false;local resultsDirty=false;local finishResult
+local K=dofile('keypad.lua')
 local keys={'Q','W','E','R','T','Y','U','I','O','P','A','S','D','F','G','H','J','K','L','Del','Z','X','C','V','B','N','M','Enter','Clear','Menu'}
 local answerPath,wordPath,wordCount
 local resultStart=0
@@ -151,10 +152,12 @@ function on_draw()
  end end
  for i,label in ipairs(keys) do local row,col=(i-1)//10,(i-1)%10;local x,y=12+col*l.kw,l.ky+row*(l.kh+4)
   local mark=g and g.keys[label] or 0;local selected=G.key==i and not G.menu
+  if not K.paint(label,{x=x,y=y,w=l.kw-3,h=l.kh},selected,mark)then
   smudge.rect(x,y,l.kw-3,l.kh,selected or mark==4,1,true)
   if mark==3 and not selected then smudge.rect_dither(x+2,y+2,l.kw-7,l.kh-4,false) end
   smudge.text(x+(l.kw-3)//2,y+(l.kh-20)//2,label,10,true,'center',not selected and mark~=4)
   if mark==2 then smudge.line(x+3,y+l.kh-4,x+l.kw-6,y+l.kh-4,true) end
+  end
  end
  smudge.text(l.w//2,l.ky+3*(l.kh+4)+4,G.notice,10,false,'center',true)
  smudge.button_hints('Menu','Select','Up','Down')

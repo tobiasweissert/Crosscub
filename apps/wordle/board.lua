@@ -1,5 +1,5 @@
 -- Native WordleScreens geometry, Jersey masks and original Lucide key art.
-local F=dofile('graphics.lua');local V={};local icons={}
+local F=dofile('graphics.lua');local K=dofile('keypad.lua');local V={};local icons={}
 local rows={{1,2,3,4,5,6,7,8,9,10},{11,12,13,14,15,16,17,18,19},{21,22,23,24,25,26,27}}
 local labels={'Q','W','E','R','T','Y','U','I','O','P','A','S','D','F','G','H','J','K','L','Del','Z','X','C','V','B','N','M','Enter','Clear','Menu'}
 function V.init()
@@ -61,15 +61,17 @@ function V.draw(l,g,notice,state,action)
   end
   return
  end
- for row,ids in ipairs(rows)do for _,id in ipairs(ids)do cell(labels[id],l.keys[id],g and g.keys[labels[id]]or 0,20)end end
+ for row,ids in ipairs(rows)do for _,id in ipairs(ids)do local mark=g and g.keys[labels[id]]or 0;if not K.paint(labels[id],l.keys[id],false,mark)then cell(labels[id],l.keys[id],mark,20)end end end
  for _,id in ipairs({28,20})do
   local b=l.keys[id];local enabled=id~=28 or g and#g.typing==5
+  if not K.paint(id==28 and 'OK' or 'Del',b,false,0,enabled,id==20 and 'delete' or 'text')then
   if id==28 and enabled then smudge.rounded_rect(b.x,b.y,b.w,b.h,8,true,true)
   else
    if not enabled then F.roundDither(b.x,b.y,b.w,b.h,8,false)end
    smudge.rounded_rect(b.x,b.y,b.w,b.h,8,false,true,enabled and 2 or 1)
   end
   smudge.bitmap(b.x+(b.w-24)//2,b.y+(b.h-24)//2,24,24,id==28 and icons.enter or icons.erase,id==28 and enabled)
+  end
  end
 end
 function V.drawMenu(l,state)

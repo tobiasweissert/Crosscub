@@ -1,4 +1,5 @@
 -- Original CrossPlay TOYBOX pad; calculation and journals remain in their tested modules.
+local K=dofile('keypad.lua')
 local C=dofile('core.lua');local S=dofile('storage.lua');local F=dofile('graphics.lua')
 local g=C.new();local selected=1;local keyboard=false;local menu=false;local notice='';local closed=false
 local keys={'AC','BS','%','/','7','8','9','*','4','5','6','-','1','2','3','+','+/-','0','.','='}
@@ -32,12 +33,14 @@ function on_draw()
   F.text(value,w-21-F.width(F.clean(value),size),139+(91-F.cap[size])//2,size)
   smudge.rect(16,230,w-32,3,true,true)
   for i,b in ipairs(cells) do
+   if not K.paint(labels[i],b,keyboard and i==selected,0)then
    local filled=i==20;F.rect(b,filled,false,i%4==0 and 6 or 2)
    local cut=#F.clean(labels[i])>2 and 20 or 28
    -- UTF-8 math symbols are one glyph even though their byte strings are longer.
    if i%4==0 then cut=28 end
    F.center(labels[i],b,cut,filled)
    if keyboard and i==selected then F.rect(F.box(b.x+8,b.y+8,b.w-16,b.h-16),false,false,2) end
+   end
   end
  end
  if notice~='' then F.center(notice,F.box(16,h-45,w-32,30),14) end
