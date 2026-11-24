@@ -1876,7 +1876,7 @@
     {
       "id": "snake",
       "name": "Snake",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "author": "Tobias Weissert",
       "description": "Minimalist swipe-controlled Snake for the Crosscub e-ink reader",
       "files": [

@@ -20,7 +20,7 @@ Movement starts at one step per 350 ms and is capped at one step per painted Lua
 
 Portrait is 480 x 800; landscape scales the same 16 x 24 board without relocating its contents. Typography uses app-local, licensed Inter-derived bitmap glyphs called Snake Paper. See `FONT-SOURCE.json` and `OFL-Inter.txt`.
 
-## Installation
+## Installation candidate
 
 Copy the **snake** folder, including its manifest, Lua files, font binary assets and icon, into:
 
@@ -28,16 +28,18 @@ Copy the **snake** folder, including its manifest, Lua files, font binary assets
 /.crosssmudge/applications/snake/
 ```
 
-In the Crosscub App Store, select **Snake** and Install. For a manual SD installation, use merge-copy and do not delete the reader's saved-data folder. Reopen Applications and select **Snake**. App Store publication does not establish physical installation or physical-panel qualification.
+Use merge-copy; do not delete the reader's saved-data folder. Reopen Applications and select **Snake**. The existing App Store installation can be upgraded in place to 0.1.1; never uninstall it to repair input. Publication/readback receipts establish Store availability separately from physical installation and panel qualification.
 
-## Verification
+## Verified candidate
 
-- 12 native VM runs passed: core, glyph/raster and app-lifecycle suites, each in portrait and landscape under 220 KiB and 2 MiB limits.
+- 16 native VM runs passed: core, glyph/raster, app-lifecycle and touch-dispatch suites, each in portrait and landscape under 220 KiB and 2 MiB limits.
+- Version 0.1.1 preserves steering and pause taps while movement redraws are pending. It also gives swipe intent priority when one release is delivered as tap followed by swipe, preserving the movement timer. Both regression sequences fail on the predecessor and pass through the unchanged firmware 2.0.3 `onTap`/`onTouch`/`onSwipe` callback bodies and touch dispatcher after this fix.
+- Full SDL runtime captures additionally exercise real scripted swipe start, steering, tap pause and tap resume. The archived simulator runtime is not a 2.0.3 firmware build or a physical-reader test.
 - Core suite has 13 rule tests, including all board dimensions from 3–32 columns and 1–32 rows.
 - App callbacks additionally exercise 32-bit millisecond rollover, no unseen catch-up movement, failed SD writes, full-board victory and sleep-override cleanup.
 - All 380 shipped glyph masks were compared with FreeType output; the production bitmap renderer's secondary-text ink ratio is approximately 75%.
-- Captures are production-method host renderer fixtures, not physical reader or full SDL screenshots. Full-repository policy testing remains blocked by the host's missing Node executable; six other policy checks passed.
-- This is an app-only Store release on `integration/sticky-test-all`. No firmware or main-branch changes are included.
+- Native-suite captures are production-method host renderer fixtures; separate SDL screenshots use the full archived simulator. Neither establishes physical reader qualification. Full-repository policy testing remains blocked by the host's missing Node executable; six other policy checks passed.
+- No firmware or main-branch change is part of this app-only fix. Store publication is tracked separately; it does not imply physical installation.
 
 ## Tests
 
@@ -47,7 +49,9 @@ The repository test entrypoint is `test/snake/run.py`. It executes the original 
 python3 test/snake/run.py --runner /path/to/capture-runner --output /fresh/output/directory
 ```
 
-To build the runner when required:
+The current runner must also expose the released touch callbacks. Build the base raster tooling first, then use `test/snake/build_touch_runner.py` with pinned firmware 2.0.3 `LuaRunner.cpp` and `LuaTouchDispatch.h`, the base tooling directory, an owned output directory and the host sysroot. Do not run the touch suite with a direct-handler-only runner.
+
+To build the base raster tooling when required:
 
 ```sh
 python3 test/crossplay_ui_parity/build_capture.py --output /owned/tooling/directory

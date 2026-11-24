@@ -3,6 +3,7 @@ local Core=smudge.dofile('core.lua')
 local Font=smudge.dofile('font.lua')
 local game,best,last_tick= nil,0,0
 local painted=false
+local tap_origin,tap_painted,tap_tick=nil,false,0 -- retained only within one input batch
 local w,h=480,800
 local tile,tile_size=nil,0
 local function valid_best(value)
@@ -35,7 +36,9 @@ function on_init()
  new_game();invalidate(true)
 end
 local function steer(direction)
- if not painted then return end
+ -- A movement redraw is not a new view: retain fresh steering while it waits.
+ -- Keep the fence only for unpainted start/pause/game-over transitions.
+ if not painted and game.status~='running' then return end
  if direction~='left' and direction~='right' and direction~='up' and direction~='down' then return end
  if game.status=='over' or game.status=='won' then new_game() end
  local before=game.status
@@ -45,9 +48,22 @@ local function steer(direction)
   if before~='running' then last_tick=smudge.millis();invalidate(false) end
  end
 end
-function on_swipe(direction)steer(direction)end
+function on_swipe(direction)
+ if direction~='left' and direction~='right' and direction~='up' and direction~='down' then return end
+ -- Firmware may deliver both tap and swipe for one release. Reconcile that
+ -- batch before steering: a swipe must not leave its preceding tap's pause
+ -- or force a fresh left swipe to start facing right.
+ if tap_origin=='running' or tap_origin=='paused' or tap_origin=='ready' then
+  game.status=tap_origin
+  if tap_origin=='running' then last_tick=tap_tick end
+  painted=tap_painted -- preserve any movement frame that was already pending.
+ end
+ tap_origin=nil
+ steer(direction)
+end
 local function toggle()
- if not painted then return end
+ -- Pausing an active run must work even while its next frame is queued.
+ if not painted and game.status~='running' then return end
  if game.status=='over' or game.status=='won' then new_game()
  elseif game.status=='ready' then Core.turn(game,'right')
  else Core.pause(game) end
@@ -55,6 +71,8 @@ local function toggle()
 end
 function on_tap(x,y)
  if x<0 or y<0 or x>=w or y>=h then return end
+ if not painted and game.status~='running' then return end
+ tap_origin,tap_painted,tap_tick=game.status,painted,last_tick
  toggle()
 end
 function on_button(button,pressed)
@@ -68,6 +86,7 @@ function on_button(button,pressed)
  else steer(button) end
 end
 function on_update()
+ tap_origin=nil -- firmware has finished this batch's tap/swipe dispatch.
  if not game or not painted or game.status~='running' then return end
  local now=smudge.millis()
  local elapsed=now-last_tick -- int32 wrapping preserves short elapsed intervals.
@@ -113,6 +132,7 @@ local function modal(title,message)
  for i,line in ipairs(lines) do Font.draw(line,w//2,by+90+(i-1)*30,cut,'center',true) end
 end
 function on_draw()
+ tap_origin=nil
  w,h=smudge.get_bounds();smudge.clear()
  local cell=math.floor(math.min(w/game.cols,(h-64)/game.rows))
  local ox=(w-cell*game.cols)//2;local oy=64+(h-64-cell*game.rows)//2
