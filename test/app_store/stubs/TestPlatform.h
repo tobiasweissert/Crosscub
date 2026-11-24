@@ -72,6 +72,8 @@ class MappedInputManager {
   enum class Button { Back, Confirm, Right, Down, PageForward, Left, Up, PageBack };
   enum class SwipeDir { None, Up, Down, Left, Right };
   bool touch = false;
+  std::function<void()> duringUpdate;
+  void update() const { if (duringUpdate) duringUpdate(); }
   std::set<Button> pressed;
   bool hasTouch() const { return touch; }
   bool isPressed(Button b) const { return pressed.count(b) != 0; }

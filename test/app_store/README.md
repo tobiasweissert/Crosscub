@@ -11,6 +11,16 @@ Coverage includes:
 - Storage opens occur under the render lock; streaming occurs outside it. The icon transport remains `ESP_HTTP` even with `FREEINK_NET_WOLFSSL` defined.
 - Real catalog JSON parsing, installed-state distinction, portrait/landscape capacity, all four safe-area orientations with asymmetric bezel margins, larger font metrics, long text, UTF-8 boundaries, navigation/wrapping, last pages, exact footer boundaries and touch Back on an empty list.
 
+## Update all apps
+
+The catalog has a 60px two-line **Update all apps** button above the app rows. It shows the available update count, or an inert outlined **No updates available** state. On physical controls, Up from the first app focuses this action; Confirm starts it. Up again selects the last app, Down returns to the first, and existing left/right/page/swipe navigation still selects apps. Touch uses the same bounds as the drawn button.
+
+The batch uses the existing installer, one installed differing-version app per activity-loop iteration. It skips uninstalled and equal-version apps (version inequality, not semantic-version ordering, matches existing Store behavior). Progress includes App N of M plus existing file progress. Back or the visible touch Cancel stops the batch, including between apps; synchronous downloader cancellation polls real mapped input. Transport/connect timeout responsiveness still requires device testing. Any installation error stops the batch; Retry retries only that app. Completion returns to the catalog and restores its selection.
+
+This does not introduce transactional package installation: the existing installer replaces package files in place, so a cancelled/failed app may need a retry. User saves and unrelated files remain under the existing preservation contract.
+
+Six named executable regressions in the routine runner cover button presence, disabled/no-op states, exact touch edges, portrait/landscape layout capacity, physical focus/navigation, sequential package selection, restored selection, batch/file progress, live input polling, network/storage failures, cancellation during and between apps, and explicit restart after cancellation. Existing cache, Wi-Fi, installer transport, save preservation, parsing and navigation cases remain enabled in normal, ASan/UBSan and owner/PSRAM runs. These are production-method host tests with fake I/O and recorded geometry—not firmware, packed-font raster, live-network or on-device acceptance.
+
 ## Run without downloads
 
 Use an existing ArduinoJson `src` directory. The script builds in `/tmp`, retains both binaries, and runs normal and ASan/UBSan variants. The sanitizer variant additionally defines `FREEINK_NET_WOLFSSL`.

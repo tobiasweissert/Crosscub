@@ -93,6 +93,17 @@ class AppStoreActivity : public Activity {
         break;
       }
 
+      case State::UPDATING_APPS: {
+        renderLoading("Updating all apps...");
+        if (mappedInput.hasTouch()) {
+          const auto rect = downloadCancelRect();
+          renderer.drawRoundedRect(rect.x, rect.y, rect.width, rect.height, 1, 6, true);
+          renderer.drawCenteredText(SMALL_FONT_ID, rect.y + (rect.height - renderer.getLineHeight(SMALL_FONT_ID)) / 2,
+                                    "Cancel", true);
+        }
+        break;
+      }
+
       case State::ERROR:
         renderError();
         break;
@@ -102,6 +113,13 @@ class AppStoreActivity : public Activity {
 
   void loop() override {
     if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
+      if (state_ == State::UPDATING_APPS) {
+        updatingAll_ = false;
+        selectedIndex_ = updateReturnIndex_;
+        state_ = State::CATALOG_READY;
+        requestUpdate();
+        return;
+      }
       if (state_ == State::DOWNLOADING) {
         cancelDownload_ = true;
         return;
@@ -166,6 +184,10 @@ class AppStoreActivity : public Activity {
         // Handled during download operation
         break;
 
+      case State::UPDATING_APPS:
+        installNextUpdate();
+        break;
+
       case State::ERROR: {
         if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
           if (isWifiConnected()) {
@@ -219,7 +241,7 @@ class AppStoreActivity : public Activity {
   }
 
  private:
-  enum class State { CHECK_WIFI, FETCHING_CATALOG, CATALOG_READY, APP_DETAIL, DOWNLOADING, ERROR };
+  enum class State { CHECK_WIFI, FETCHING_CATALOG, CATALOG_READY, APP_DETAIL, DOWNLOADING, UPDATING_APPS, ERROR };
 
   struct CatalogApp {
     std::string id;
@@ -244,6 +266,12 @@ class AppStoreActivity : public Activity {
   std::vector<CatalogApp> apps_;
   int selectedIndex_ = 0;
   bool cancelDownload_ = false;
+  bool updatingAll_ = false;
+  bool updateAllFocused_ = false;
+  int updateAppNum_ = 0;
+  int updateAppTotal_ = 0;
+  int updateScanIndex_ = 0;
+  int updateReturnIndex_ = 0;
   unsigned long lastIconWorkMs_ = 0;
 
   std::string currentDownloadingFile_;
@@ -564,6 +592,25 @@ class AppStoreActivity : public Activity {
   bool handleCatalogInput() {
     int count = static_cast<int>(apps_.size());
 
+    if (updateAllFocused_) {
+      if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
+        beginUpdateAll();
+        return true;
+      }
+      if (mappedInput.wasReleased(MappedInputManager::Button::Up) ||
+          mappedInput.wasReleased(MappedInputManager::Button::Down)) {
+        updateAllFocused_ = false;
+        selectedIndex_ = mappedInput.wasReleased(MappedInputManager::Button::Up) ? std::max(0, count - 1) : 0;
+        requestUpdate();
+        return true;
+      }
+    } else if (count > 0 && availableUpdates() > 0 && selectedIndex_ == 0 &&
+               mappedInput.wasReleased(MappedInputManager::Button::Up)) {
+      updateAllFocused_ = true;
+      requestUpdate();
+      return true;
+    }
+
     const auto layout = catalogLayout();
     const int rowsPerPage = layout.rowsPerPage;
     int pageStart = (selectedIndex_ / rowsPerPage) * rowsPerPage;
@@ -572,12 +619,14 @@ class AppStoreActivity : public Activity {
                       mappedInput.wasReleased(MappedInputManager::Button::Down) ||
                       mappedInput.wasReleased(MappedInputManager::Button::PageForward))) {
       selectedIndex_ = (selectedIndex_ + 1) % count;
+      updateAllFocused_ = false;
       requestUpdate();
       return true;
     } else if (count > 0 && (mappedInput.wasReleased(MappedInputManager::Button::Left) ||
                              mappedInput.wasReleased(MappedInputManager::Button::Up) ||
                              mappedInput.wasReleased(MappedInputManager::Button::PageBack))) {
       selectedIndex_ = (selectedIndex_ - 1 + count) % count;
+      updateAllFocused_ = false;
       requestUpdate();
       return true;
     }
@@ -585,11 +634,13 @@ class AppStoreActivity : public Activity {
     auto swipe = mappedInput.wasSwipe();
     if (count > 0 && (swipe == MappedInputManager::SwipeDir::Up || swipe == MappedInputManager::SwipeDir::Left)) {
       selectedIndex_ = (selectedIndex_ + 1) % count;
+      updateAllFocused_ = false;
       requestUpdate();
       return true;
     } else if (count > 0 &&
                (swipe == MappedInputManager::SwipeDir::Down || swipe == MappedInputManager::SwipeDir::Right)) {
       selectedIndex_ = (selectedIndex_ - 1 + count) % count;
+      updateAllFocused_ = false;
       requestUpdate();
       return true;
     }
@@ -605,6 +656,13 @@ class AppStoreActivity : public Activity {
     int tx = 0, ty = 0;
     if (mappedInput.wasScreenTapped(tx, ty)) {
       if (tx < layout.left || tx >= layout.right || ty < layout.headerY || ty >= layout.bottom) return true;
+      updateAllFocused_ = false;
+      if (ty >= layout.updateY && ty < layout.updateY + 60) {
+        if (availableUpdates() > 0) {
+          beginUpdateAll();
+        }
+        return true;
+      }
       if (ty >= layout.controlsY) {
         int action = -1;
         for (int i = 0; i < 4; ++i) {
@@ -738,6 +796,52 @@ class AppStoreActivity : public Activity {
     }
   }
 
+  void beginUpdateAll() {
+    updateAppTotal_ = availableUpdates();
+    if (updateAppTotal_ == 0) return;
+    updateAllFocused_ = false;
+    cancelDownload_ = false;
+    updatingAll_ = true;
+    updateAppNum_ = 0;
+    updateScanIndex_ = 0;
+    updateReturnIndex_ = selectedIndex_;
+    state_ = State::UPDATING_APPS;
+    requestUpdate();
+  }
+
+  void installNextUpdate() {
+    if (downloadCancelled()) {
+      updatingAll_ = false;
+      selectedIndex_ = updateReturnIndex_;
+      state_ = State::CATALOG_READY;
+      requestUpdate();
+      return;
+    }
+    while (updateScanIndex_ < static_cast<int>(apps_.size())) {
+      const int index = updateScanIndex_++;
+      auto& app = apps_[index];
+      if (!app.isInstalled || app.installedVersion == app.version) continue;
+      selectedIndex_ = index;
+      ++updateAppNum_;
+      installApp(app);
+      if (state_ == State::ERROR || cancelDownload_) {
+        updatingAll_ = false;
+        if (cancelDownload_) {
+          selectedIndex_ = updateReturnIndex_;
+          state_ = State::CATALOG_READY;
+        }
+      } else {
+        state_ = State::UPDATING_APPS;
+      }
+      requestUpdate();
+      return;
+    }
+    updatingAll_ = false;
+    selectedIndex_ = updateReturnIndex_;
+    state_ = State::CATALOG_READY;
+    requestUpdate();
+  }
+
   void installApp(CatalogApp& app) {
     if (!isWifiConnected()) {
       state_ = State::ERROR;
@@ -800,7 +904,13 @@ class AppStoreActivity : public Activity {
       std::string fileUrl = baseUrl_ + app.id + "/" + app.files[i];
 
       HttpDownloader::DownloadOptions options;
-      options.shouldCancel = [this]() { return cancelDownload_; };
+      options.shouldCancel = [this]() {
+        // Downloads run synchronously on the activity loop: refresh hardware
+        // input here so Cancel does not depend on another loop iteration.
+        if (cancelDownload_) return true;
+        mappedInput.update();
+        return downloadCancelled();
+      };
       options.transport = HttpDownloader::Transport::ESP_HTTP;
 
       HttpDownloader::DownloadError err = HttpDownloader::HTTP_ERROR;
@@ -957,8 +1067,16 @@ class AppStoreActivity : public Activity {
   }
 
   struct CatalogLayout {
-    int left, right, headerY, startY, rowH, rowsPerPage, footerY, controlsY, bottom;
+    int left, right, headerY, startY, rowH, rowsPerPage, footerY, controlsY, bottom, updateY;
   };
+
+  int availableUpdates() const {
+    int count = 0;
+    for (const auto& app : apps_) {
+      if (app.isInstalled && app.installedVersion != app.version) ++count;
+    }
+    return count;
+  }
 
   CatalogLayout catalogLayout() const {
     const auto& m = UITheme::getInstance().getMetrics();
@@ -971,12 +1089,13 @@ class AppStoreActivity : public Activity {
     right = std::min(renderer.getScreenWidth() - right, safe.x + safe.width) - 16;
     bottom = std::min(renderer.getScreenHeight() - bottom, safe.y + safe.height) - 6;
     const int headerY = std::max(top, safe.y) + m.topPadding;
-    const int startY = headerY + m.headerHeight + 6;
+    const int updateY = headerY + m.headerHeight + 6;
+    const int startY = updateY + 60 + 6;
     const int rowH = std::max(56, renderer.getLineHeight(UI_10_FONT_ID) + renderer.getLineHeight(SMALL_FONT_ID) + 20);
     const int controlsY = bottom - std::max(44, renderer.getLineHeight(SMALL_FONT_ID) + 16);
     const int footerY = controlsY - renderer.getLineHeight(SMALL_FONT_ID) - 8;
     const int rows = std::max(1, (footerY - 6 - startY) / rowH);
-    return {left, right, headerY, startY, rowH, rows, footerY, controlsY, bottom};
+    return {left, right, headerY, startY, rowH, rows, footerY, controlsY, bottom, updateY};
   }
 
   // Fit bounded UTF-8 buffers without allocating a string on every paint.
@@ -1014,12 +1133,31 @@ class AppStoreActivity : public Activity {
     GUI.drawHeader(renderer, Rect{layout.left, layout.headerY, layout.right - layout.left, m.headerHeight},
                    tr(STR_STORE_TITLE));
 
+    const int updates = availableUpdates();
+    if (updates > 0) {
+      renderer.fillRoundedRect(layout.left, layout.updateY, layout.right - layout.left, 60, 6, Color::Black);
+    } else {
+      renderer.drawRoundedRect(layout.left, layout.updateY, layout.right - layout.left, 60, 1, 6, true);
+    }
+    if (updateAllFocused_) renderer.drawRoundedRect(layout.left - 3, layout.updateY - 3,
+                                                   layout.right - layout.left + 6, 66, 1, 6, true);
+    const char* updateLabel = "Update all apps";
+    renderer.drawText(SMALL_FONT_ID,
+                      layout.left + (layout.right - layout.left - renderer.getTextWidth(SMALL_FONT_ID, updateLabel)) / 2,
+                      layout.updateY + 6, updateLabel, updates == 0, EpdFontFamily::BOLD);
+    char updateStatus[64];
+    if (updates == 0) snprintf(updateStatus, sizeof(updateStatus), "No updates available");
+    else snprintf(updateStatus, sizeof(updateStatus), "%d updates available", updates);
+    renderer.drawText(SMALL_FONT_ID,
+                      layout.left + (layout.right - layout.left - renderer.getTextWidth(SMALL_FONT_ID, updateStatus)) / 2,
+                      layout.updateY + 32, updateStatus, updates == 0);
+
     const int count = static_cast<int>(apps_.size());
     const int pageStart = selectedIndex_ / layout.rowsPerPage * layout.rowsPerPage;
     for (int i = pageStart; i < count && i < pageStart + layout.rowsPerPage; ++i) {
       const auto& app = apps_[i];
       const int y = layout.startY + (i - pageStart) * layout.rowH;
-      const bool isSelected = i == selectedIndex_;
+      const bool isSelected = i == selectedIndex_ && !updateAllFocused_;
       if (isSelected) {
         renderer.fillRoundedRect(layout.left, y, layout.right - layout.left, layout.rowH - 4, 6, Color::Black);
       } else {
@@ -1204,6 +1342,23 @@ class AppStoreActivity : public Activity {
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
   }
 
+  Rect downloadCancelRect() const {
+    const auto safe = wifiSafeRect();
+    return Rect{safe.x + 16, safe.y + safe.height - 54, safe.width - 32, 44};
+  }
+
+  bool downloadCancelled() {
+    int tx = 0, ty = 0;
+    const auto rect = downloadCancelRect();
+    if (mappedInput.isPressed(MappedInputManager::Button::Back) ||
+        mappedInput.wasReleased(MappedInputManager::Button::Back) ||
+        (mappedInput.hasTouch() && mappedInput.wasScreenTapped(tx, ty) &&
+         tx >= rect.x && tx < rect.x + rect.width && ty >= rect.y && ty < rect.y + rect.height)) {
+      cancelDownload_ = true;
+    }
+    return cancelDownload_;
+  }
+
   void renderDownloadProgress(const char* appName) {
     int w = renderer.getScreenWidth();
     int h = renderer.getScreenHeight();
@@ -1218,6 +1373,18 @@ class AppStoreActivity : public Activity {
     snprintf(fileBuf, sizeof(fileBuf), "File %d of %d: %s", currentFileNum_, totalFiles_,
              currentDownloadingFile_.c_str());
     renderer.drawCenteredText(SMALL_FONT_ID, h / 2, fileBuf, true);
+
+    if (updatingAll_) {
+      char appProgress[48];
+      snprintf(appProgress, sizeof(appProgress), "App %d of %d", updateAppNum_, updateAppTotal_);
+      renderer.drawCenteredText(SMALL_FONT_ID, h / 2 + 32, appProgress, true);
+    }
+    if (mappedInput.hasTouch()) {
+      const auto rect = downloadCancelRect();
+      renderer.drawRoundedRect(rect.x, rect.y, rect.width, rect.height, 1, 6, true);
+      renderer.drawCenteredText(SMALL_FONT_ID, rect.y + (rect.height - renderer.getLineHeight(SMALL_FONT_ID)) / 2,
+                                "Cancel", true);
+    }
 
     const auto labels = mappedInput.mapLabels("Cancel", "", "", "");
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);

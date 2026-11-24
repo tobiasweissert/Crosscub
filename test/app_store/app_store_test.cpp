@@ -64,7 +64,8 @@ struct Fixture {
     app.render(RenderLock{});
     std::vector<Draw> v;
     for (auto& d : renderer.draws)
-      if (d.kind == "row" && d.w > renderer.width / 2 && d.h >= 48) v.push_back(d);
+      if (d.kind == "row" && d.w > renderer.width / 2 && d.h >= 48 && d.y >= app.catalogLayout().startY)
+        v.push_back(d);
     return v;
   }
   static std::string cache() { return "/.crosssmudge/cache/icons/fixture-0.raw"; }
@@ -91,7 +92,8 @@ void portrait() {
   Fixture f;
   auto rows = f.rows();
   CHECK(rows.size() > 8);
-  CHECK(rows.back().y + rows.back().h > 650);
+  const auto layout = f.app.catalogLayout();
+  CHECK(rows.back().y + layout.rowH * 2 > layout.footerY - 6);
 }
 void landscape() {
   Fixture f;
@@ -537,6 +539,205 @@ void verifiedStoreTransport() {
   std::printf("PASS authenticated catalog/install/retries/errors/cancel\n");
 }
 
+void updateAllButton() {
+  for (bool landscape : {false, true}) {
+    Fixture f(1);
+    f.input.touch = true;
+    f.renderer.width = landscape ? 800 : 480;
+    f.renderer.height = landscape ? 480 : 800;
+    f.app.render(RenderLock{});
+    bool found = false, disabled = false;
+    for (const auto& d : f.renderer.draws) {
+      if (d.text == "Update all apps") {
+        found = true;
+        CHECK(d.x >= 16 && d.x + d.w <= f.renderer.width - 16);
+        CHECK(d.y >= 0 && d.y + d.h <= f.renderer.height);
+      }
+      if (d.text == "No updates available") disabled = true;
+    }
+    CHECK(found);
+    CHECK(disabled);
+  }
+}
+
+void seedUpdates(Fixture& f) {
+  for (int i = 0; i < static_cast<int>(f.app.apps_.size()); ++i) {
+    auto& a = f.app.apps_[i];
+    a.files = {"main.lua", "manifest.json"};
+    a.isInstalled = i != 1;
+    a.installedVersion = i == 2 ? a.version : "0.9";
+    a.iconAttempted = true;
+    if (a.isInstalled) {
+      const std::string manifest = "{\"version\":\"" + a.installedVersion + "\"}";
+      Storage.files["/.crosssmudge/applications/" + a.id + "/manifest.json"].bytes.assign(manifest.begin(), manifest.end());
+    }
+  }
+  const std::string manifest = R"({"version":"1.0"})";
+  HttpDownloader::body.assign(manifest.begin(), manifest.end());
+}
+void tapUpdateAll(Fixture& f) {
+  const auto l = f.app.catalogLayout();
+  f.input.tap(l.left + 8, l.updateY + 8);
+  f.tick();
+}
+void updateAllSelection() {
+  Fixture f(4);
+  seedUpdates(f);
+  f.app.selectedIndex_ = 2;
+  tapUpdateAll(f);
+  for (int i = 0; i < 5; ++i) f.tick();
+  CHECK(HttpDownloader::requests == std::vector<std::string>({
+    f.app.baseUrl_ + "fixture-0/main.lua", f.app.baseUrl_ + "fixture-0/manifest.json",
+    f.app.baseUrl_ + "fixture-3/main.lua", f.app.baseUrl_ + "fixture-3/manifest.json"}));
+  CHECK(f.app.apps_[0].installedVersion == "1.0");
+  CHECK(f.app.apps_[3].installedVersion == "1.0");
+  CHECK(!f.app.apps_[1].isInstalled);
+  CHECK(f.app.state_ == AppStoreActivity::State::CATALOG_READY);
+  CHECK(f.app.selectedIndex_ == 2);
+  CHECK(!f.app.finished);
+}
+
+void updateAllStops() {
+  for (int mode = 0; mode < 7; ++mode) {
+    Fixture f(4);
+    seedUpdates(f);
+    tapUpdateAll(f);
+    if (mode == 0) HttpDownloader::result = HttpDownloader::HTTP_ERROR;
+    if (mode == 1) HttpDownloader::result = HttpDownloader::FILE_ERROR;
+    if (mode == 2) WiFi.connected = false;
+    if (mode == 3) Storage.directories = false;
+    if (mode == 4) f.input.released.insert(MappedInputManager::Button::Back);
+    if (mode == 5) HttpDownloader::duringRequest = [&]() {
+      f.input.duringUpdate = [&]() { f.input.pressed.insert(MappedInputManager::Button::Back); };
+    };
+    if (mode == 6) {
+      f.input.touch = true;
+      HttpDownloader::duringRequest = [&]() {
+        f.input.duringUpdate = [&]() { f.input.tap(f.renderer.width / 2, f.renderer.height - 25); };
+      };
+    }
+    f.tick();
+    HttpDownloader::duringRequest = nullptr;
+    f.input.pressed.clear();
+    CHECK(!f.app.finished);
+    CHECK(!f.app.updatingAll_);
+    CHECK(f.app.state_ == (mode < 4 ? AppStoreActivity::State::ERROR : AppStoreActivity::State::CATALOG_READY));
+    for (const auto& request : HttpDownloader::requests) CHECK(request.find("fixture-3/") == std::string::npos);
+    CHECK(f.app.apps_[3].installedVersion == "0.9");
+    if (mode >= 4) CHECK(f.app.apps_[0].installedVersion == "0.9");
+    if (mode < 2) {
+      // Retry only the failed app, never implicitly resume the stopped batch.
+      HttpDownloader::result = HttpDownloader::OK;
+      f.input.released.insert(MappedInputManager::Button::Confirm);
+      f.tick();
+      CHECK(f.app.state_ == AppStoreActivity::State::APP_DETAIL);
+      CHECK(f.app.apps_[3].installedVersion == "0.9");
+    }
+  }
+}
+
+void updateAllKeyboard() {
+  Fixture f(4);
+  seedUpdates(f);
+  f.input.released.insert(MappedInputManager::Button::Up);
+  f.tick();
+  f.input.released.insert(MappedInputManager::Button::Confirm);
+  f.tick();
+  CHECK(f.app.state_ == AppStoreActivity::State::UPDATING_APPS);
+  f.tick();
+  CHECK(f.app.apps_[0].installedVersion == "1.0");
+  for (int mode = 0; mode < 6; ++mode) {
+    Fixture nav(4);
+    seedUpdates(nav);
+    nav.input.released.insert(MappedInputManager::Button::Up);
+    nav.tick();
+    if (mode == 0) nav.input.released.insert(MappedInputManager::Button::Right);
+    if (mode == 1) nav.input.released.insert(MappedInputManager::Button::PageForward);
+    if (mode == 2) nav.input.swipe = MappedInputManager::SwipeDir::Up;
+    if (mode == 3) nav.input.released.insert(MappedInputManager::Button::Left);
+    if (mode == 4) nav.input.released.insert(MappedInputManager::Button::PageBack);
+    if (mode == 5) nav.input.swipe = MappedInputManager::SwipeDir::Down;
+    nav.tick();
+    nav.input.released.insert(MappedInputManager::Button::Confirm);
+    nav.tick();
+    CHECK(nav.app.state_ == AppStoreActivity::State::APP_DETAIL);
+    CHECK(nav.app.selectedIndex_ == (mode < 3 ? 1 : 3));
+  }
+}
+void updateAllProgress() {
+  Fixture f(4);
+  f.input.touch = true;
+  seedUpdates(f);
+  tapUpdateAll(f);
+  std::vector<std::string> progress;
+  HttpDownloader::duringRequest = [&]() {
+    f.app.render(RenderLock{});
+    for (const auto& d : f.renderer.draws) {
+      if (d.text == "App 1 of 2" || d.text == "App 2 of 2") progress.push_back(d.text);
+    }
+    bool cancel = false;
+    for (const auto& d : f.renderer.draws) if (d.text == "Cancel") cancel = true;
+    CHECK(cancel);
+  };
+  f.tick();
+  f.tick();
+  CHECK(progress == std::vector<std::string>({"App 1 of 2", "App 1 of 2", "App 2 of 2", "App 2 of 2"}));
+}
+
+void updateAllBoundaries() {
+  for (bool touch : {false, true}) for (bool landscape : {false, true}) {
+    Fixture f(4);
+    f.input.touch = touch;
+    f.renderer.width = landscape ? 800 : 480;
+    f.renderer.height = landscape ? 480 : 800;
+    f.renderer.orientation = landscape ? GfxRenderer::Orientation::LandscapeClockwise : GfxRenderer::Orientation::Portrait;
+    seedUpdates(f);
+    auto l = f.app.catalogLayout();
+    CHECK(l.updateY + 60 <= l.startY);
+    CHECK(l.startY + l.rowsPerPage * l.rowH <= l.footerY - 6);
+    for (auto xy : std::vector<std::pair<int, int>>{{l.left - 1,l.updateY}, {l.right,l.updateY}, {l.left,l.updateY - 1}, {l.left,l.updateY + 60}}) {
+      f.input.tap(xy.first, xy.second);
+      f.tick();
+      CHECK(!f.app.updatingAll_);
+      CHECK(HttpDownloader::requests.empty());
+    }
+    tapUpdateAll(f);
+    f.tick(); // First app complete, cancellation must stop the next app too.
+    const auto rect = f.app.downloadCancelRect();
+    f.input.tap(rect.x + 8, rect.y + 8);
+    if (!touch) f.input.released.insert(MappedInputManager::Button::Back);
+    f.tick();
+    CHECK(!f.app.updatingAll_);
+    CHECK(!f.app.finished);
+    CHECK(f.app.state_ == AppStoreActivity::State::CATALOG_READY);
+    CHECK(f.app.apps_[3].installedVersion == "0.9");
+    CHECK(HttpDownloader::requests.size() == 2);
+    tapUpdateAll(f);
+    f.tick();
+    CHECK(f.app.apps_[3].installedVersion == "1.0");
+  }
+  for (int count : {0, 1}) {
+    Fixture f(count);
+    tapUpdateAll(f);
+    CHECK(f.app.state_ == AppStoreActivity::State::CATALOG_READY);
+    CHECK(!f.app.updatingAll_);
+    CHECK(HttpDownloader::requests.empty());
+  }
+  {
+    Fixture f(4);
+    seedUpdates(f);
+    f.input.released.insert(MappedInputManager::Button::Up);
+    f.tick();
+    const auto l = f.app.catalogLayout();
+    f.input.tap(l.left + 5, l.startY + l.rowH + 5);
+    f.tick();
+    CHECK(!f.app.updateAllFocused_);
+    f.input.released.insert(MappedInputManager::Button::Confirm);
+    f.tick();
+    CHECK(f.app.state_ == AppStoreActivity::State::APP_DETAIL);
+  }
+}
+
 int main() {
   verifiedStoreTransport();
   updatePreservesUserFiles();
@@ -546,7 +747,13 @@ int main() {
   wifiComposition();
   std::printf("Wi-Fi composition failures: %d\n", failures);
 #endif
-  const std::pair<const char*, void (*)()> cases[] = {{"lazy icons and render isolation", lazyIcons},
+  const std::pair<const char*, void (*)()> cases[] = {{"update all bounds, disabled state and resume", updateAllBoundaries},
+                                                      {"update all physical focus and navigation", updateAllKeyboard},
+                                                      {"update all progress and touch cancel", updateAllProgress},
+                                                      {"update all error and cancellation stops", updateAllStops},
+                                                      {"update all installed differing-version selection", updateAllSelection},
+                                                      {"update all visible button", updateAllButton},
+                                                      {"lazy icons and render isolation", lazyIcons},
                                                       {"portrait full screen", portrait},
                                                       {"landscape containment", landscape},
                                                       {"local cache validation", localIconValidation},

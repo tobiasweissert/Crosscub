@@ -1,3 +1,13 @@
+## [2.0.3]
+
+### Added
+
+- App Store **Update all apps** action with an available-update count, sequential updates of installed apps, batch/file progress, and physical or touch cancellation. Errors stop the batch; Retry retries only the failed app. Existing user-save preservation remains unchanged.
+
+### Qualification
+
+- Production-method host tests cover enabled/disabled actions, navigation, layout bounds, sequential updates, cancellation, progress, and failure handling. Physical Sticky installation and transport-timeout responsiveness remain device acceptance items.
+
 ## [Unreleased]
 
 ### Crosscub
