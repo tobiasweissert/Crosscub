@@ -69,13 +69,28 @@ function U.key(key)
  U.redraw()
 end
 -- UTF-8 byte caps keep saves and keyboard editing bounded on C3.
-function U.edit(title,value,limit,done)
+function U.edit(title,value,limit,done,mode)
+ if U.editor then U.closeEditor() end
  U.buttons={};U.digits=nil
+ mode=mode or 'text'
+ -- Native API is additive: old installed firmware keeps its legacy editor.
+ if type(smudge.text_entry_request)=='function' and type(smudge.text_entry_poll)=='function' and type(smudge.text_entry_cancel)=='function' then
+  local id=smudge.text_entry_request(title,value or '',limit,mode)
+  if not id then U.notice='Native keyboard unavailable. Close and retry.';U.redraw();return false end
+  U.editor={title=title,value=value or '',limit=limit,done=done,nativeId=id}
+  U.editorDraw=U.editorDraw or dofile('editor.lua');U.focus=1;U.redraw();return true
+ end
  collectgarbage('collect')
  U.editorDraw=U.editorDraw or dofile('editor.lua')
  U.editor={title=title,value=value or '',limit=limit,done=done,shift=false,numeric=false};U.focus=1;U.redraw()
 end
-function U.closeEditor() U.buttons={};U.editor=nil;U.focus=1 end
+function U.closeEditor()
+ if U.editor and U.editor.nativeId then
+  smudge.text_entry_cancel(U.editor.nativeId)
+  smudge.text_entry_poll(U.editor.nativeId) -- consume cancellation before another edit
+ end
+ U.buttons={};U.editor=nil;U.focus=1
+end
 function U.editDraw() U.editorDraw(U) end
 function U.save(S,payload)
  if not S.save(payload) then U.notice='Save failed. Keep open and retry.';return false end

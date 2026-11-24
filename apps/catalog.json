@@ -75,7 +75,7 @@
     {
       "id": "weather",
       "name": "Weather",
-      "version": "0.1.2",
+      "version": "0.1.3",
       "author": "CrossSmudge",
       "description": "Current conditions and forecasts from Open-Meteo.",
       "min_api": 3,
@@ -86,13 +86,27 @@
         "forecast.lua",
         "icon.raw",
         "json.lua",
-        "keyboard.lua",
         "main.lua",
         "manifest.json",
         "model.lua",
+        "numeric_sans.lua",
+        "numeric_sans_128.bin",
+        "numeric_sans_150.bin",
+        "numeric_sans_180.bin",
+        "numeric_sans_24.bin",
+        "numeric_sans_32.bin",
+        "numeric_sans_48.bin",
+        "numeric_sans_64.bin",
+        "numeric_sans_96.bin",
+        "numeric_sans_OFL.txt",
+        "numeric_sans_SOURCE.txt",
+        "numeric_sans_metrics.lua",
         "storage.lua",
         "ui.lua",
-        "unified_ui.lua"
+        "unified_ui.lua",
+        "weather_font_SOURCE.json",
+        "weather_icons.lua",
+        "weather_view.lua"
       ]
     },
     {

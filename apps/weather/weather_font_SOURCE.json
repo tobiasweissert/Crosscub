@@ -1,0 +1,48 @@
+{
+  "derivative": "Weather numeric subset; unchanged genuine Liberation Sans Bold glyph masks",
+  "repertoire": "0123456789-",
+  "generator": "test/weather_redesign/subset_font.py",
+  "upstream": "Crosscub Numeric Sans v1; full source and OFL notices in numeric_sans_SOURCE.txt and numeric_sans_OFL.txt",
+  "cuts": {
+    "numeric_sans_24.bin": {
+      "source_sha256": "99c521264188260fe8e7cd7e7fccb5953f1e1b9715efd6d5b36c82f1bb9eb84e",
+      "weather_sha256": "ca07183d0578f1b004509478fa7b5e2f10508caebb4e4e6368797cb22491721c",
+      "bytes": 398
+    },
+    "numeric_sans_32.bin": {
+      "source_sha256": "a339e8e5efa3793501eb8f24bb64922c5e326848c8227aa2710dc52b097bc526",
+      "weather_sha256": "8b1130837cb93facceb100b5ce98a52de8cc4dbedf451bd1aaef83528a169639",
+      "bytes": 774
+    },
+    "numeric_sans_48.bin": {
+      "source_sha256": "3900e122bf0ab08d10f418e29a3fbf96400a6e7e4713d7f7a011819f305e3302",
+      "weather_sha256": "8fd96e1f08528fc07cff738447177794ca1d365350a75fc5784d23bd5584ca1e",
+      "bytes": 1539
+    },
+    "numeric_sans_64.bin": {
+      "source_sha256": "842d3465469af21e898440f0361e03a35bd8b6fce3ecfb24546a718e6f7af468",
+      "weather_sha256": "0ef94b107c0242094a8698a821a19bf015d1ce5c1e150a559e6536f9eb2ce152",
+      "bytes": 2526
+    },
+    "numeric_sans_96.bin": {
+      "source_sha256": "29b6dd49e5c6c3b39e475305f6bf7c50a06468cad521f0cf9a934addf0c53769",
+      "weather_sha256": "3c852af3401f7c49eb5b1550b3892fb1ade3e6585dc28916b47a3aa1c1ee831e",
+      "bytes": 6106
+    },
+    "numeric_sans_128.bin": {
+      "source_sha256": "f1843081da80b68b335310d8c39c9fbf149de52b964bb3ff4e825c54c6b482ae",
+      "weather_sha256": "0f44f2c68b1c6e9d58df841f53f1aa32cbec774ec7babe7b54ccf7888087a45a",
+      "bytes": 10266
+    },
+    "numeric_sans_150.bin": {
+      "source_sha256": "b125034054e8775acd8b9805f4042fd650446a639e343f0f960982edc0e89d60",
+      "weather_sha256": "19e406977271b907c0ab10acc4dd451c986f72e3f502ec513a48ed0fadaa2039",
+      "bytes": 14514
+    },
+    "numeric_sans_180.bin": {
+      "source_sha256": "9fb3e6a8f98bbcc3e02f70129ac1b7290a5632301b63d408d7ad20563b6214ee",
+      "weather_sha256": "295d6077aa9d46267f749984dbdbd7d876459f9e4be6ce460058d92a5da7df25",
+      "bytes": 20232
+    }
+  }
+}
