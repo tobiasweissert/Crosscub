@@ -27,7 +27,7 @@ class IntegrationPolicy(unittest.TestCase):
         c.read(ROOT/'platformio.ini')
         self.assertEqual(c['platformio']['default_envs'], 'sticky')
         for section in ('crosspoint', 'crosssmudge', 'crossink'):
-            self.assertEqual(c[section]['version'], '2.0.2')
+            self.assertEqual(c[section]['version'], '2.0.4')
         packed = ['sticky', 'default', 'sticky-owner-test', EXPERIMENT]
         for name in packed:
             self.assertEqual(option(c, 'env:'+name, 'custom_static_builtin_data', 'no'), 'yes')

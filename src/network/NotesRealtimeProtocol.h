@@ -1,5 +1,6 @@
 #pragma once
 #include <ArduinoJson.h>
+
 #include <string>
 
 namespace notes {
@@ -13,20 +14,31 @@ inline bool validText(const std::string& text) {
   for (size_t i = 0; i < text.size();) {
     const auto c = static_cast<unsigned char>(text[i++]);
     if (c == '\n' && ++lines > 97) return false;
-    if (c < 128) { if (c == 0 || (c < 32 && c != '\n' && c != '\t' && c != '\r')) return false; continue; }
-    unsigned n; uint32_t cp;
-    if (c >= 0xc2 && c <= 0xdf) { n = 1; cp = c & 31; }
-    else if (c >= 0xe0 && c <= 0xef) { n = 2; cp = c & 15; }
-    else if (c >= 0xf0 && c <= 0xf4) { n = 3; cp = c & 7; }
-    else return false;
+    if (c < 128) {
+      if (c == 0 || (c < 32 && c != '\n' && c != '\t' && c != '\r')) return false;
+      continue;
+    }
+    unsigned n;
+    uint32_t cp;
+    if (c >= 0xc2 && c <= 0xdf) {
+      n = 1;
+      cp = c & 31;
+    } else if (c >= 0xe0 && c <= 0xef) {
+      n = 2;
+      cp = c & 15;
+    } else if (c >= 0xf0 && c <= 0xf4) {
+      n = 3;
+      cp = c & 7;
+    } else
+      return false;
     if (n > text.size() - i) return false;
     for (unsigned j = 0; j < n; ++j) {
       const auto next = static_cast<unsigned char>(text[i++]);
       if ((next & 0xc0) != 0x80) return false;
       cp = (cp << 6) | (next & 63);
     }
-    if ((n == 2 && cp < 0x800) || (n == 3 && cp < 0x10000) || cp > 0x10ffff ||
-        (cp >= 0xd800 && cp <= 0xdfff)) return false;
+    if ((n == 2 && cp < 0x800) || (n == 3 && cp < 0x10000) || cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff))
+      return false;
   }
   return true;
 }
@@ -38,7 +50,10 @@ struct Transcript {
     if (raw.size() > 16384 || deserializeJson(doc, raw) || !doc["type"].is<const char*>()) return false;
     const std::string type = doc["type"].as<const char*>();
     if (type == "error" || type == "conversation.item.input_audio_transcription.failed") return false;
-    if (type == "session.updated") { ready = true; return true; }
+    if (type == "session.updated") {
+      ready = true;
+      return true;
+    }
     const bool delta = type == "conversation.item.input_audio_transcription.delta";
     const bool final = type == "conversation.item.input_audio_transcription.completed";
     const bool commit = type == "input_audio_buffer.committed";
@@ -47,7 +62,8 @@ struct Transcript {
     const std::string id = doc["item_id"].as<const char*>();
     if (id.empty() || id.size() > 128 || (!item.empty() && item != id) || (!committed.empty() && committed != id))
       return false;
-    if (commit) committed = id;
+    if (commit)
+      committed = id;
     else {
       if (!doc["content_index"].is<unsigned>() || doc["content_index"].as<unsigned>() != 0) return false;
       const auto value = doc[delta ? "delta" : "transcript"];

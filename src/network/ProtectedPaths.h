@@ -12,9 +12,12 @@
 // match, so the stores' temp/backup siblings are covered too.
 namespace protectedpaths {
 
-inline constexpr const char* SENSITIVE_FILES[] = {"/.crosspoint/wifi.json", "/.crosspoint/opds.json",
-                                                  "/.crosspoint/koreader.json", "/.crosspoint/opds_tokens.json",
-                                                  "/.crosspoint/lcp_passphrases.json", "/.crosspoint/notes-openai.key"};
+inline constexpr const char* SENSITIVE_FILES[] = {"/.crosspoint/wifi.json",
+                                                  "/.crosspoint/opds.json",
+                                                  "/.crosspoint/koreader.json",
+                                                  "/.crosspoint/opds_tokens.json",
+                                                  "/.crosspoint/lcp_passphrases.json",
+                                                  "/.crosspoint/notes-openai.key"};
 
 // SdFat also opens a name by its generated 8.3 alias (".crosspoint" is
 // CROSSP~1), which no spelling check can map back to the long name.

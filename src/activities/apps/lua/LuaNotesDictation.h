@@ -28,11 +28,26 @@ inline int notesPoll(lua_State* L) {
   return 3;
 }
 inline void registerNotesDictation(lua_State* L, NotesDictation& owner) {
-  const struct { const char* name; lua_CFunction function; } functions[] = {
-    {"notes_dictation_start", [](lua_State* L) { lua_pushboolean(L, notesOwner(L).start()); return 1; }},
-    {"notes_dictation_stop", [](lua_State* L) { notesOwner(L).stop(); return 0; }},
-    {"notes_dictation_cancel", [](lua_State* L) { notesOwner(L).cancel(); return 0; }},
-    {"notes_dictation_poll", notesPoll},
+  const struct {
+    const char* name;
+    lua_CFunction function;
+  } functions[] = {
+      {"notes_dictation_start",
+       [](lua_State* L) {
+         lua_pushboolean(L, notesOwner(L).start());
+         return 1;
+       }},
+      {"notes_dictation_stop",
+       [](lua_State* L) {
+         notesOwner(L).stop();
+         return 0;
+       }},
+      {"notes_dictation_cancel",
+       [](lua_State* L) {
+         notesOwner(L).cancel();
+         return 0;
+       }},
+      {"notes_dictation_poll", notesPoll},
   };
   for (const auto& function : functions) {
     lua_pushlightuserdata(L, &owner);

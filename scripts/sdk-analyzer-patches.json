@@ -1,0 +1,42 @@
+{
+  "libs/ui/FreeInkUI/include/components/bars/battery-indicator.h": {
+    "sha256": "af6244ed19ec20d9d5cb0fb30ad3dd33200a6fd6c04cefed5a6462404033e8a7",
+    "edits": [
+      [
+        "    const Rect ink = frame.target().inkBounds(style.font, props.label, style);\n    const int16_t labelY =\n        static_cast<int16_t>(body.y + (body.height - ink.height) / 2 - ink.y);",
+        "    const Rect labelInk = frame.target().inkBounds(style.font, props.label, style);\n    const int16_t labelY =\n        static_cast<int16_t>(body.y + (body.height - labelInk.height) / 2 - labelInk.y);"
+      ]
+    ]
+  },
+  "libs/ui/FreeInkUI/include/components/lists/list.h": {
+    "sha256": "30a00528f9e76100452a59c78df691a84788d410a819ef923fa3075a77af0625",
+    "edits": [
+      [
+        "      const Rect button = actionRect.inset(Insets{inset, inset, inset, inset});\n      frame.target().fill(button, Paint::solid(Color::White), props.rowRadius);\n      frame.target().stroke(button, Paint::solid(Color::Black), 1, props.rowRadius);\n      if (reveal->icon)\n        frame.target().bitmap(centeredRect(button, Size{static_cast<int16_t>(reveal->icon.width),\n                                                       static_cast<int16_t>(reveal->icon.height)}),\n                              reveal->icon, BitmapMode::Contain, Paint::solid(Color::Black));\n    }\n",
+        "      const Rect actionButton = actionRect.inset(Insets{inset, inset, inset, inset});\n      frame.target().fill(actionButton, Paint::solid(Color::White), props.rowRadius);\n      frame.target().stroke(actionButton, Paint::solid(Color::Black), 1, props.rowRadius);\n      if (reveal->icon)\n        frame.target().bitmap(centeredRect(actionButton, Size{static_cast<int16_t>(reveal->icon.width),\n                                                       static_cast<int16_t>(reveal->icon.height)}),\n                              reveal->icon, BitmapMode::Contain, Paint::solid(Color::Black));\n    }\n"
+      ]
+    ]
+  },
+  "libs/ui/FreeInkUI/include/components/media/catalog.h": {
+    "sha256": "e985c004dc068286ef1e676701098f9b84548425b900b451cab7b81b2d6bb6ac",
+    "edits": [
+      [
+        "  Rect header = take(body, headerH, props.headerGap);\n  const int16_t gap = nonnegative(props.gap);\n  const int16_t width = props.cardWidth > 0 ? min(body.width, props.cardWidth) : 0;\n  const uint16_t visible = !body.empty() && width > 0 ? (body.width + gap) / (width + gap) : 0;\n  CatalogWindow local;\n  CatalogWindow& window = props.window ? *props.window : local;\n  window.sync(props.count, visible);\n  auto control = [&](ButtonProps buttonProps, int16_t desiredWidth, bool available) {\n    if (!hasButton(buttonProps) || header.empty()) return;\n    const int16_t w = min(header.width, desiredWidth > buttonProps.minTouchSize ? desiredWidth : buttonProps.minTouchSize);\n    if (w <= 0) return;\n    Rect band{static_cast<int16_t>(header.right() - w), header.y, w, header.height};\n    header.width -= min(header.width, static_cast<int16_t>(w + gap));\n    buttonProps.enabled = enabled && buttonProps.enabled && available && !hasState(buttonProps.state, StateDisabled);\n    button(frame, band, buttonProps);\n  };\n  if (enabled && props.swipeNavigation) {\n    if (window.canNext() && props.next.enabled && !hasState(props.next.state, StateDisabled) && props.next.action != NO_ACTION)\n      frame.hit(rect, props.next.action, props.next.value, InputSwipeLeft);\n    if (window.canPrevious() && props.previous.enabled && !hasState(props.previous.state, StateDisabled) && props.previous.action != NO_ACTION)\n      frame.hit(rect, props.previous.action, props.previous.value, InputSwipeRight);\n  }\n  control(props.next, props.navigationWidth, window.canNext());\n  control(props.previous, props.navigationWidth, window.canPrevious());\n  control(props.seeAll, props.seeAllWidth, true);\n  TextStyle heading = textStyleWithForeground(props.headingText, style.foreground);\n  heading.bold = true;\n  text(frame.target(), header, props.title, heading, 1, 0);\n",
+        "  Rect headerRect = take(body, headerH, props.headerGap);\n  const int16_t gap = nonnegative(props.gap);\n  const int16_t width = props.cardWidth > 0 ? min(body.width, props.cardWidth) : 0;\n  const uint16_t visible = !body.empty() && width > 0 ? (body.width + gap) / (width + gap) : 0;\n  CatalogWindow local;\n  CatalogWindow& window = props.window ? *props.window : local;\n  window.sync(props.count, visible);\n  auto control = [&](ButtonProps buttonProps, int16_t desiredWidth, bool available) {\n    if (!hasButton(buttonProps) || headerRect.empty()) return;\n    const int16_t w = min(headerRect.width, desiredWidth > buttonProps.minTouchSize ? desiredWidth : buttonProps.minTouchSize);\n    if (w <= 0) return;\n    Rect band{static_cast<int16_t>(headerRect.right() - w), headerRect.y, w, headerRect.height};\n    headerRect.width -= min(headerRect.width, static_cast<int16_t>(w + gap));\n    buttonProps.enabled = enabled && buttonProps.enabled && available && !hasState(buttonProps.state, StateDisabled);\n    button(frame, band, buttonProps);\n  };\n  if (enabled && props.swipeNavigation) {\n    if (window.canNext() && props.next.enabled && !hasState(props.next.state, StateDisabled) && props.next.action != NO_ACTION)\n      frame.hit(rect, props.next.action, props.next.value, InputSwipeLeft);\n    if (window.canPrevious() && props.previous.enabled && !hasState(props.previous.state, StateDisabled) && props.previous.action != NO_ACTION)\n      frame.hit(rect, props.previous.action, props.previous.value, InputSwipeRight);\n  }\n  control(props.next, props.navigationWidth, window.canNext());\n  control(props.previous, props.navigationWidth, window.canPrevious());\n  control(props.seeAll, props.seeAllWidth, true);\n  TextStyle heading = textStyleWithForeground(props.headingText, style.foreground);\n  heading.bold = true;\n  text(frame.target(), headerRect, props.title, heading, 1, 0);\n"
+      ]
+    ]
+  },
+  "libs/ui/FreeInkUI/include/components/media/publication-page.h": {
+    "sha256": "abae0d2776bdff43708dbbb7648b8aeae4036cc49c119f9ac83e5b2b137081d7",
+    "edits": [
+      [
+        "#include \"../../FreeInkUICore.h\"",
+        "#include <iterator>\n#include <numeric>\n\n#include \"../../FreeInkUICore.h\""
+      ],
+      [
+        "  for (const char* label : details) {\n    if (present(label)) availabilityH += frame.target().lineHeight(av.detailText.font) + nonnegative(av.gap);\n  }",
+        "  availabilityH = std::accumulate(\n      std::begin(details), std::end(details), availabilityH,\n      [&](int16_t height, const char* label) -> int16_t {\n        return present(label)\n                   ? static_cast<int16_t>(height + frame.target().lineHeight(av.detailText.font) + nonnegative(av.gap))\n                   : height;\n      });"
+      ]
+    ]
+  }
+}

@@ -9,7 +9,24 @@ import sys
 PROBE_TIMEOUT = 60
 
 
+def with_target_config(command, includes):
+    # --skip-packages drops framework search paths, including the selected
+    # HybridCompile configuration. Reuse exactly the compiler's first header;
+    # do not expose other package headers or manufacture configuration defines.
+    for directory in includes:
+        header = Path(directory) / 'sdkconfig.h'
+        if header.is_file():
+            return [command[0], '--include=' + str(header), *command[1:]]
+    raise RuntimeError('compiler-selected sdkconfig.h is required for static builtins')
+
+
 def capture_execute(original, tool, command):
+    if any(str(define).split('=', 1)[0] == 'CROSSPOINT_STATIC_BUILTINS'
+           for define in getattr(tool, 'cpp_defines', ())):
+        command = with_target_config(command, tool.cpp_includes)
+        import runpy
+        exact = runpy.run_path(str(Path(__file__).with_name('cppcheck_exact.py')))
+        command = [command[0], *exact['suppressions'](Path.cwd()), *command[1:]]
     from ci_producer_capture import output_root, retain, save_receipt, bounded_diagnostic
     out = output_root()
     if not (out/'cppcheck-generated-header-receipt.json').exists():
@@ -73,6 +90,10 @@ def capture_execute(original, tool, command):
 
 
 def raw_policy_fields(record, delimiter, keys):
+    # Core's LineBufferedAsyncPipe retains LF (or CRLF) on callback records.
+    # Remove only that transport terminator before checking the exact raw keys;
+    # do not normalize quotes/whitespace inside category or diagnostic identity.
+    record = record.removesuffix('\n').removesuffix('\r')
     # The template can quote the whole record, never its individual keys.
     if record.startswith('"') and record.endswith('"'):
         record = record[1:-1]

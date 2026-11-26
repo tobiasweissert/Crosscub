@@ -73,7 +73,8 @@ class WebSocket {
     if (payload.size() > LIMIT || (op >= 8 && payload.size() > 125)) return {};
     std::string out;
     out += static_cast<char>(128 | op);
-    if (payload.size() < 126) out += static_cast<char>(128 | payload.size());
+    if (payload.size() < 126)
+      out += static_cast<char>(128 | payload.size());
     else {
       out += static_cast<char>(128 | 126);
       out += static_cast<char>(payload.size() >> 8);
@@ -84,6 +85,7 @@ class WebSocket {
     for (size_t i = 0; i < payload.size(); ++i) out += static_cast<char>(payload[i] ^ out[start + i % 4]);
     return out;
   }
+
  private:
   std::string input, partial;
   bool fragmented = false;

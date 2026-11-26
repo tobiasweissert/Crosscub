@@ -6,12 +6,12 @@
 #include <Logging.h>
 #ifndef SIMULATOR
 #include <esp_crt_bundle.h>
+#include <esp_random.h>
 #include <esp_timer.h>
 #include <esp_tls.h>
 #include <lwip/netdb.h>
-#include <mbedtls/ssl.h>
 #include <mbedtls/sha1.h>
-#include <esp_random.h>
+#include <mbedtls/ssl.h>
 #include <mbedtls/x509_crt.h>
 #endif
 #include <algorithm>
@@ -814,5 +814,7 @@ bool mintPasswordToken(freeink::SecureHttpClient* session, const std::string& ur
 
 }  // namespace pluginhttp
 
+// clang-format off: the implementation fragment consumes notes:: declarations from the wire header.
 #include "network/NotesRealtimeWire.h"
 #include "NotesRealtimeTransport.inc"
+// clang-format on

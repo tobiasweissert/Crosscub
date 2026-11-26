@@ -3,7 +3,6 @@
 #include <BrowserImage.h>
 #include <HalStorage.h>
 #include <LuaHttp.h>
-#include "network/NotesDictation.h"
 
 #include <atomic>
 #include <cstdint>
@@ -11,6 +10,7 @@
 #include <string>
 
 #include "../../../../lib/AirDrop/browser/LuaLaunch.h"
+#include "network/NotesDictation.h"
 
 extern "C" {
 #include "lauxlib.h"

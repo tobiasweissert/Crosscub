@@ -22,6 +22,7 @@ class AudioQueue {
     used -= n;
     return n;
   }
+
  private:
   uint8_t* memory;
   size_t capacity, first = 0, used = 0;

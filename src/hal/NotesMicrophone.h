@@ -14,6 +14,7 @@ class NotesMicrophone {
   size_t read(uint8_t* out, size_t maximum);
   void stop();
   bool close();
+
  private:
   std::mutex gate;
   std::atomic<bool> revoked{false};

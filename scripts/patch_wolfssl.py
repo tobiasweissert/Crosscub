@@ -106,6 +106,10 @@ int SecureClient::connectPinned(const char* host, IPAddress vettedAddress, uint1
         edit('  int connect(IPAddress ip, uint16_t port) override;', '  int connectPinned(const char* host, IPAddress vettedAddress, uint16_t port);\n  int connect(IPAddress ip, uint16_t port) override;')
         edit('  WiFiClient _transport;', '  IPAddress _pinnedIP;\n  bool _usePinnedIP = false;\n  WiFiClient _transport;')
     else:
+        edit('#include <string>', '#include <numeric>\n#include <string>')
+        edit('    for (const std::string& h : _headers) size += h.size();',
+             '    size = std::accumulate(_headers.begin(), _headers.end(), size,\n'
+             '                           [](size_t total, const std::string& header) { return total + header.size(); });')
         edit('  void setInsecure() { _insecure = true; }', '  void setInsecure() { closeConnection(); _secure.setInsecure(); _insecure = true; }')
         edit('    _rootCA = rootCA;\n    _insecure = false;', '    closeConnection();\n    _secure.setCACert(rootCA);\n    _rootCA = rootCA;\n    _insecure = false;')
         edit('      } else if (_rootCA) {\n        _secure.setCACert(_rootCA);', '      } else {\n        _secure.setCACert(_rootCA);')
@@ -128,7 +132,13 @@ def sdk_secure_net_outputs(sdk_root):
         if hashlib.sha256(restored.encode()).hexdigest() != expected:
             raise RuntimeError("Unknown SDK SecureNet bytes: " + path)
         candidate = _secure_net_transform(path, restored)
-        if candidate != current:
+        legacy = candidate
+        if path.endswith('SecureHttpClient.h'):
+            legacy = candidate.replace(b'#include <numeric>\n#include <string>', b'#include <string>').replace(
+                b'    size = std::accumulate(_headers.begin(), _headers.end(), size,\n'
+                b'                           [](size_t total, const std::string& header) { return total + header.size(); });',
+                b'    for (const std::string& h : _headers) size += h.size();')
+        if current not in (candidate, legacy):
             raise RuntimeError("Invalid installed SecureNet overlay: " + path)
         outputs[path] = candidate
     return outputs
@@ -137,6 +147,14 @@ SDK_SECURENET_INVERSE = {'libs/network/SecureNet/src/SecureClient.cpp': [('// in
 
 
 def _secure_net_inverse(path, text):
+    # Accept the previous exact TLS overlay as well as the accumulated-size
+    # successor; immutable upstream hash verification still follows inversion.
+    if path.endswith('SecureHttpClient.h'):
+        text = text.replace('#include <numeric>\n#include <string>', '#include <string>')
+        text = text.replace(
+            '    size = std::accumulate(_headers.begin(), _headers.end(), size,\n'
+            '                           [](size_t total, const std::string& header) { return total + header.size(); });',
+            '    for (const std::string& h : _headers) size += h.size();')
     for installed, original in SDK_SECURENET_INVERSE[path]:
         if not installed or text.count(installed) != 1:
             raise RuntimeError("Unknown installed SecureNet bytes: " + path)
@@ -146,9 +164,15 @@ def _secure_net_inverse(path, text):
 
 _sdk_root = PROJECT_DIR / "freeink-sdk"
 if (_sdk_root / next(iter(SDK_SECURENET_PREIMAGES))).is_file():
-    _outputs = sdk_secure_net_outputs(_sdk_root)
+    # The same exact local fixes run for metadata, check and firmware builds.
+    import runpy
+    _analyzer = runpy.run_path(str(PROJECT_DIR / 'scripts/cppcheck_exact.py'))
+    # Authenticate both families completely before writing either one.
+    _outputs = _analyzer['prepare_patches'](_sdk_root)
+    _outputs.update(sdk_secure_net_outputs(_sdk_root))
     for _path, _data in _outputs.items():
         _target = _sdk_root / _path
         if _target.read_bytes() != _data:
             _target.write_bytes(_data)
-            print("Applied revision-bound Crosscub SecureNet overlay: " + _path)
+            if _path in SDK_SECURENET_PREIMAGES:
+                print("Applied revision-bound Crosscub SecureNet overlay: " + _path)

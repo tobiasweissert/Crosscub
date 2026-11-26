@@ -1,0 +1,176 @@
+{
+  "sdk_revision": "634a3f8c067a3714a6a7c622015138af096ab5d2",
+  "exceptions": [
+    {
+      "path": "freeink-sdk/libs/display/FreeInkDisplay/src/bus/EpdBus.h",
+      "id": "functionStatic",
+      "line": 107,
+      "sha256": "1c11be4c9d9b7753b3f4fc504d6371b04ac55610e7719dc2ea7404d29dd3295b",
+      "source": "    void release() {}",
+      "reason": "PM-disabled/no-ARDUINO branch supplies an instance no-op counterpart to the PM-enabled stateful PmLockGuard.release; both conditional definitions compile/run, enabled guard releases exactly once. Current authenticated Sticky sdkconfig has PM disabled. A static replacement breaks member-pointer parity.",
+      "test": "test/crosspoint_migration/docs-ci/test_cppcheck_native_exceptions.py"
+    },
+    {
+      "path": "freeink-sdk/libs/hardware/InputManager/include/InputManager.h",
+      "id": "functionStatic",
+      "line": 219,
+      "sha256": "2ef3344f2e6b636ef64265b1d6d2ab8b84ef0568c7c2cda4d802e33e51044fb2",
+      "source": "  bool hasToggleSwitch() const { return BoardConfig::ACTIVE.input.toggleSwitch >= 0; }",
+      "reason": "Pinned const-instance capability query contract; static replacement changes member-function type. Compiled exact-declaration member-pointer positive and static-mutation negative.",
+      "test": "test/crosspoint_migration/docs-ci/test_cppcheck_native_exceptions.py"
+    },
+    {
+      "path": "freeink-sdk/libs/ui/FreeInkUI/include/FreeInkApp.h",
+      "id": "passedByValue",
+      "line": 198,
+      "sha256": "863c489a8f7fe324a8c3ccbdadb444e5d86931faba4b593ceeba37b75c979737",
+      "source": "  void navHeader(const char *title, ActionId backAction, BitmapRef backIcon,",
+      "reason": "Intentional pinned public value/snapshot API for borrowed UI descriptors; const-reference recommendation changes the exact public callable type. Compile-time public function/member-pointer contracts and reference-mutation negatives preserve API without changing SDK signatures.",
+      "test": "test/crosspoint_migration/docs-ci/test_cppcheck_native_exceptions.py"
+    },
+    {
+      "path": "freeink-sdk/libs/ui/FreeInkUI/include/FreeInkApp.h",
+      "id": "passedByValue",
+      "line": 818,
+      "sha256": "863c489a8f7fe324a8c3ccbdadb444e5d86931faba4b593ceeba37b75c979737",
+      "source": "  void setDevice(DeviceContext device) { device_ = device; }",
+      "reason": "Intentional pinned public value/snapshot API for borrowed UI descriptors; const-reference recommendation changes the exact public callable type. Compile-time public function/member-pointer contracts and reference-mutation negatives preserve API without changing SDK signatures.",
+      "test": "test/crosspoint_migration/docs-ci/test_cppcheck_native_exceptions.py"
+    },
+    {
+      "path": "freeink-sdk/libs/ui/FreeInkUI/include/FreeInkUICore.h",
+      "id": "passedByValue",
+      "line": 518,
+      "sha256": "4c2f29d09bcf63b8fa3be1ec636a77993ca8741026a2e4f157a0b4411df390a0",
+      "source": "  static constexpr Paint bitmapFill(BitmapFill fill) {",
+      "reason": "Intentional pinned public value/snapshot API for borrowed UI descriptors; const-reference recommendation changes the exact public callable type. Compile-time public function/member-pointer contracts and reference-mutation negatives preserve API without changing SDK signatures.",
+      "test": "test/crosspoint_migration/docs-ci/test_cppcheck_native_exceptions.py"
+    },
+    {
+      "path": "freeink-sdk/libs/ui/FreeInkUI/include/FreeInkUICore.h",
+      "id": "passedByValue",
+      "line": 769,
+      "sha256": "4c2f29d09bcf63b8fa3be1ec636a77993ca8741026a2e4f157a0b4411df390a0",
+      "source": "                       const char *text, const TextStyle style, Emit &&emit) {",
+      "reason": "Intentional pinned public value/snapshot API for borrowed UI descriptors; const-reference recommendation changes the exact public callable type. Compile-time public function/member-pointer contracts and reference-mutation negatives preserve API without changing SDK signatures.",
+      "test": "test/crosspoint_migration/docs-ci/test_cppcheck_native_exceptions.py"
+    },
+    {
+      "path": "freeink-sdk/libs/ui/FreeInkUI/include/FreeInkUICore.h",
+      "id": "passedByValue",
+      "line": 898,
+      "sha256": "4c2f29d09bcf63b8fa3be1ec636a77993ca8741026a2e4f157a0b4411df390a0",
+      "source": "                               const TextStyle style, const int16_t maxWidth) {",
+      "reason": "Intentional pinned public value/snapshot API for borrowed UI descriptors; const-reference recommendation changes the exact public callable type. Compile-time public function/member-pointer contracts and reference-mutation negatives preserve API without changing SDK signatures.",
+      "test": "test/crosspoint_migration/docs-ci/test_cppcheck_native_exceptions.py"
+    },
+    {
+      "path": "freeink-sdk/libs/ui/FreeInkUI/include/FreeInkUICore.h",
+      "id": "passedByValue",
+      "line": 1843,
+      "sha256": "4c2f29d09bcf63b8fa3be1ec636a77993ca8741026a2e4f157a0b4411df390a0",
+      "source": "inline void drawBorderEdges(DrawTarget &target, Rect rect, Paint paint,",
+      "reason": "Intentional pinned public value/snapshot API for borrowed UI descriptors; const-reference recommendation changes the exact public callable type. Compile-time public function/member-pointer contracts and reference-mutation negatives preserve API without changing SDK signatures.",
+      "test": "test/crosspoint_migration/docs-ci/test_cppcheck_native_exceptions.py"
+    },
+    {
+      "path": "freeink-sdk/libs/ui/FreeInkUI/include/FreeInkUIGfxRenderer.h",
+      "id": "passedByValue",
+      "line": 91,
+      "sha256": "41ce2594ea4e5c198c855fd60f4df133e8c35f3be1cae5d70f82c4d0d7f157ad",
+      "source": "  Size measureText(const FontId font, const char* text, const TextStyle style) const override {",
+      "reason": "Pinned DrawTarget virtual override contract requires this exact value parameter; const-reference mutation fails override compilation.",
+      "test": "test/crosspoint_migration/docs-ci/test_cppcheck_native_exceptions.py"
+    },
+    {
+      "path": "freeink-sdk/libs/ui/FreeInkUI/include/FreeInkUIGfxRenderer.h",
+      "id": "passedByValue",
+      "line": 105,
+      "sha256": "41ce2594ea4e5c198c855fd60f4df133e8c35f3be1cae5d70f82c4d0d7f157ad",
+      "source": "  Rect inkBounds(const FontId font, const char* text, const TextStyle style) const override {",
+      "reason": "Pinned DrawTarget virtual override contract requires this exact value parameter; const-reference mutation fails override compilation.",
+      "test": "test/crosspoint_migration/docs-ci/test_cppcheck_native_exceptions.py"
+    },
+    {
+      "path": "freeink-sdk/libs/ui/FreeInkUI/include/FreeInkUIGfxRenderer.h",
+      "id": "passedByValue",
+      "line": 124,
+      "sha256": "41ce2594ea4e5c198c855fd60f4df133e8c35f3be1cae5d70f82c4d0d7f157ad",
+      "source": "  void fill(const Rect rect, const Paint paint, const uint8_t radius = 0,",
+      "reason": "Pinned DrawTarget virtual override contract requires this exact value parameter; const-reference mutation fails override compilation.",
+      "test": "test/crosspoint_migration/docs-ci/test_cppcheck_native_exceptions.py"
+    },
+    {
+      "path": "freeink-sdk/libs/ui/FreeInkUI/include/FreeInkUIGfxRenderer.h",
+      "id": "passedByValue",
+      "line": 155,
+      "sha256": "41ce2594ea4e5c198c855fd60f4df133e8c35f3be1cae5d70f82c4d0d7f157ad",
+      "source": "  void stroke(const Rect rect, const Paint paint, const uint8_t width, const uint8_t radius = 0,",
+      "reason": "Pinned DrawTarget virtual override contract requires this exact value parameter; const-reference mutation fails override compilation.",
+      "test": "test/crosspoint_migration/docs-ci/test_cppcheck_native_exceptions.py"
+    },
+    {
+      "path": "freeink-sdk/libs/ui/FreeInkUI/include/FreeInkUIGfxRenderer.h",
+      "id": "passedByValue",
+      "line": 183,
+      "sha256": "41ce2594ea4e5c198c855fd60f4df133e8c35f3be1cae5d70f82c4d0d7f157ad",
+      "source": "  void line(const Point from, const Point to, const uint8_t width, const Paint paint) override {",
+      "reason": "Pinned DrawTarget virtual override contract requires this exact value parameter; const-reference mutation fails override compilation.",
+      "test": "test/crosspoint_migration/docs-ci/test_cppcheck_native_exceptions.py"
+    },
+    {
+      "path": "freeink-sdk/libs/ui/FreeInkUI/include/FreeInkUIGfxRenderer.h",
+      "id": "passedByValue",
+      "line": 188,
+      "sha256": "41ce2594ea4e5c198c855fd60f4df133e8c35f3be1cae5d70f82c4d0d7f157ad",
+      "source": "  void triangle(const Point a, const Point b, const Point c, const Paint paint) override {",
+      "reason": "Pinned DrawTarget virtual override contract requires this exact value parameter; const-reference mutation fails override compilation.",
+      "test": "test/crosspoint_migration/docs-ci/test_cppcheck_native_exceptions.py"
+    },
+    {
+      "path": "freeink-sdk/libs/ui/FreeInkUI/include/FreeInkUIGfxRenderer.h",
+      "id": "passedByValue",
+      "line": 226,
+      "sha256": "41ce2594ea4e5c198c855fd60f4df133e8c35f3be1cae5d70f82c4d0d7f157ad",
+      "source": "  void text(const Rect rect, const char* text, const TextStyle style) override {",
+      "reason": "Pinned DrawTarget virtual override contract requires this exact value parameter; const-reference mutation fails override compilation.",
+      "test": "test/crosspoint_migration/docs-ci/test_cppcheck_native_exceptions.py"
+    },
+    {
+      "path": "freeink-sdk/libs/ui/FreeInkUI/include/FreeInkUIGfxRenderer.h",
+      "id": "passedByValue",
+      "line": 326,
+      "sha256": "41ce2594ea4e5c198c855fd60f4df133e8c35f3be1cae5d70f82c4d0d7f157ad",
+      "source": "  void bitmap(const Rect rect, const BitmapRef bitmap, const BitmapMode mode,",
+      "reason": "Pinned DrawTarget virtual override contract requires this exact value parameter; const-reference mutation fails override compilation.",
+      "test": "test/crosspoint_migration/docs-ci/test_cppcheck_native_exceptions.py"
+    },
+    {
+      "path": "freeink-sdk/libs/ui/FreeInkUI/include/FreeInkUIGfxRenderer.h",
+      "id": "passedByValue",
+      "line": 327,
+      "sha256": "41ce2594ea4e5c198c855fd60f4df133e8c35f3be1cae5d70f82c4d0d7f157ad",
+      "source": "              const Paint foreground = Paint::solid(Color::Black),",
+      "reason": "Pinned DrawTarget virtual override contract requires this exact value parameter; const-reference mutation fails override compilation.",
+      "test": "test/crosspoint_migration/docs-ci/test_cppcheck_native_exceptions.py"
+    },
+    {
+      "path": "freeink-sdk/libs/ui/FreeInkUI/include/components/media/publication-page.h",
+      "id": "identicalConditionAfterEarlyExit",
+      "line": 204,
+      "sha256": "398188d8e44e05da50b43a88d9c9da4e386a00da0390b3ff61cdb217bd7fdfef",
+      "source": "  if (body.empty()) return;",
+      "reason": "Real reference-capturing action lambda consumes body; deleting this guard executes availability layout on exhausted space. Original/deletion executable counterexample.",
+      "test": "test/crosspoint_migration/docs-ci/test_cppcheck_native_exceptions.py"
+    },
+    {
+      "path": "lib/hal/HalGPIO.h",
+      "id": "functionStatic",
+      "line": 74,
+      "sha256": "0ac8894a038e22eb04430ced0eaf676980339654df7a64c62aefb8ef7d7042ea",
+      "source": "  bool isXteinkDevice() const { return false; }  // Crosscub admits Sticky only.",
+      "reason": "Pinned const-instance capability query contract; static replacement changes member-function type. Compiled exact-declaration member-pointer positive and static-mutation negative.",
+      "test": "test/crosspoint_migration/docs-ci/test_cppcheck_native_exceptions.py"
+    }
+  ]
+}

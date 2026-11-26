@@ -1,2 +1,2 @@
 #pragma once
-constexpr int pdPASS=1;
+constexpr int pdPASS = 1;
