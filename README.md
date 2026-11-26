@@ -2,7 +2,7 @@
 
 **An e-reader and SD-installable Lua app platform for Seeed Studio reTerminal Sticky.**
 
-Crosscub is a Sticky-only product with historical lineage through [CrossSmudge](https://github.com/Mumfee/CrossSmudge), [CrossInk](https://github.com/uxjulia/crossink), [CrossPoint Reader](https://github.com/crosspoint-reader/crosspoint-reader) and the [FreeInk SDK](https://freeink.org/). It preserves the reader, typography, application runtime and existing settings/save locations while developing an owner-controlled firmware and app distribution route.
+Crosscub is a [CrossInk](https://github.com/uxjulia/CrossInk)-based e-reader firmware and Lua app platform adapted for the **Seeed Studio reTerminal Sticky**. CrossInk is the project upstream; CrossSmudge is part of its earlier history, not the current upstream. Crosscub preserves the reader, typography, application runtime and existing settings/save locations while developing an owner-controlled firmware and app distribution route. The current development branch also integrates [CrossPoint Reader](https://github.com/crosspoint-reader/crosspoint-reader) directly, as detailed below, and uses the [FreeInk SDK](https://freeink.org/) for hardware support.
 
 - **Hardware:** reTerminal Sticky, ESP32-S3, 16 MiB flash, 8 MiB PSRAM, touchscreen e-paper.
 - **Reading:** EPUB library and reading progress, configurable typography, reading statistics, bookmarks, reading aids and inherited transfer/sync features.
@@ -229,9 +229,10 @@ The native simulator needs SDL2 development headers/libraries and OpenSSL develo
 
 ## Credits and licenses
 
-- [CrossSmudge](https://github.com/Mumfee/CrossSmudge) and [CrossInk](https://github.com/uxjulia/crossink), including Julia (@uxjulia)'s typography, reading statistics and reading aids.
+- [CrossInk](https://github.com/uxjulia/CrossInk), the project upstream, including Julia (@uxjulia)'s typography, reading statistics and reading aids.
+- [CrossSmudge](https://github.com/Mumfee/CrossSmudge) for its historical contributions to Crosscub's earlier foundation.
 - [CrossPoint Reader](https://github.com/crosspoint-reader/crosspoint-reader) for the original e-reader architecture and EPUB engine.
 - [FreeInk SDK](https://freeink.org/) for hardware drivers and display abstractions.
 - CrossPlay contributors and the individual app authors, font designers and artwork projects credited in each package's license/provenance files.
 
-The root [LICENSE](LICENSE) is **MIT**. Inherited/bundled components retain their own licenses and attribution requirements; this README does not relicense them. App screenshots depict the real packaged artwork and fonts, whose component notices remain applicable.
+The root [LICENSE](LICENSE) covers original CrossPoint code under **MIT**, except where individual files state otherwise. The combined firmware executable uses **GPLv3** because it includes wolfSSL; see [third-party notices and source instructions](licenses/README.md). Inherited/bundled components retain their own licenses and attribution requirements; this README does not relicense them. App screenshots depict the real packaged artwork and fonts, whose component notices remain applicable.
