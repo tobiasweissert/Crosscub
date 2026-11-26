@@ -26,3 +26,27 @@ At 512 KiB or more, the frontend ports the original Jersey masks, black header, 
 Differences: eight fixed note cards, original blank-row filtering and phone/sleep/editor integration remain the limitations above. No inert ADD/rename/phone/sleep controls are drawn: OPTIONS, HOW TO IMPORT and the existing import/conversion actions occupy the applicable footer/sheet controls. Library names remain Note 1–8 because the current core has no editable title metadata. A selected row has a narrow focus bar for physical buttons. Very long paragraphs continue over pages; swipes/Page buttons turn them, while Up/Down select logical rows and Left/Right retain horizontal scrolling. Glyph rounding and host Unicode metrics can change wrapping compared with FreeInkUI. This does not establish pixel-identical firmware rendering.
 
 Run `python3 test/utility_ui/run.py` for import/toggle/confirmation/read-only-source/full-capacity checks under both memory limits and `python3 test/utility_ui/capture.py` for native bitmap previews. Provenance is in `art/sources.json`, with the original OFL notice. On hardware, import UTF-8 and long cards, page via touch/buttons, tick/clear/cancel/re-import, convert both ways, then exit/reopen and verify the original `.md` file remains unchanged.
+
+## Current Sticky source candidate: keyboard, selection and key setting
+
+The stock-firmware limitations above are historical. With the matching new native
+firmware API, Options → Edit / dictate supports offline typing, native text taps,
+UTF-8 code-point arrows, Select + tap/arrows, Select All, selection replacement/
+deletion, wrapped-line movement and caret-following scrolling. More reveals
+Up/Down/Home/End. Cursor switches physical arrows from key focus to text movement;
+Confirm returns to key focus. Save uses the existing journal; physical Back still
+discards the unsaved draft. Manual entry needs neither Wi-Fi nor an OpenAI key.
+
+Options → OpenAI key provides masked new-key entry with explicit Save/Cancel and
+separate Save/Clear confirmations. The existing key is never shown or returned
+to Lua. Storage is plaintext on SD at `/.crosspoint/notes-openai.key`, protected
+from app/web file access, not encrypted at rest. Key changes do not send requests;
+only explicit Start begins dictation. New input necessarily exists in the Lua
+draft until dismissed. Include `key_settings.lua` with the updated controller;
+firmware 2.0.4 alone does not provide the new API. No release/package version or
+Store publication is implied by this source candidate.
+
+The production host regressions and deterministic native geometry tests do not
+replace on-device checks for both orientations, real-font selection/caret
+contrast, touch positioning, physical buttons, SD fault/power-loss behavior,
+eInk refresh, recording timing/acoustics or paid-provider execution.

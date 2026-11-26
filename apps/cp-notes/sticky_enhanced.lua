@@ -2,6 +2,7 @@ local N=dofile('core.lua');local S=dofile('storage.lua');local F=dofile('graphic
 local doc,lines,index,selected,screen,choice='',{},1,1,'library',1
 -- Only a card loaded through load() owns the document and journal sequence.
 local loaded=false
+local editor,keySettings
 local hits={};local summaries={};local pages={};local viewPage=1;local pageAnchor=0;local closed=false;local original;local offset=0;local notice='';local w,h=480,800;local margin=25;local pageRows=8;local pending=''
 local function save()
  if not loaded then return true end
@@ -20,7 +21,7 @@ local function load(index_)
  lines=N.parse(doc,true);loaded=true;screen='note'
 end
 local function redraw()smudge.request_update()end
-local options={'Resume','Clear checked lines','Convert to checklist','Convert to page','Import from note file','Help','Save and close'}
+local options={'Resume','Clear checked lines','Convert to checklist','Convert to page','Import from note file','Help','Save and close','Edit / dictate','OpenAI key'}
 local function change(new)
  summaries[index]=nil;pageAnchor=0;viewPage=1;S.last=nil;offset=0;doc=new;lines=nil;collectgarbage('collect');lines=N.parse(doc,true);selected=math.min(selected,#lines);redraw()
 end
@@ -31,6 +32,17 @@ local function operate()
  elseif choice==3 then change(N.tolist(doc,lines));screen='note'
  elseif choice==4 then change(N.strip(doc,lines));screen='note'
  elseif choice==6 then screen='help'
+ elseif choice==9 then
+  if smudge.notes_key_status then
+   keySettings=dofile('key_settings.lua')(function()keySettings=nil;screen='menu';redraw()end)
+  else notice='Key settings require updated firmware' end
+ elseif choice==8 then
+  if smudge.keyboard_snapshot then
+   editor=dofile('dictation_editor.lua')(doc,function(value)
+    if not S.save(value) then return false end
+    change(value);editor=nil;screen='note';return true
+   end,N.validate);screen='edit'
+  else notice='Editing requires updated Sticky firmware' end
  elseif save() then loaded=false;screen='library';choice=index end
  redraw()
 end
@@ -92,7 +104,10 @@ local function plan(top,bottom,reserved)
  viewPage=math.max(1,math.min(viewPage,#pages));return total,done
 end
 function on_draw()
- w,h=smudge.get_bounds();hits={};smudge.clear();local title=screen=='library' and 'NOTES' or 'NOTE '..index
+ w,h=smudge.get_bounds();
+ if keySettings then keySettings.draw('OpenAI key',F);return end
+ if editor then editor.draw('Note '..index,F);return end
+ hits={};smudge.clear();local title=screen=='library' and 'NOTES' or 'NOTE '..index
  if screen=='library' then F.header(title,w) else F.header('',w);F.text(title,16,26,20,true) end
  if screen~='library' then
   smudge.rect(w-79,5,66,66,true,false);smudge.bitmap(w-62,22,32,32,F.settings,false)
@@ -143,9 +158,12 @@ function on_draw()
    button('CLEAR DONE',F.box(28+(w-44)//2,footer.y,(w-44)//2,52),'clear',nil,true)
   else button('OPTIONS',footer,'menu') end
  elseif screen=='menu' then
-  local pitch=math.min(76,(h-119-100)//#options)
-  for i,label in ipairs(options) do local b=F.box(16,119+(i-1)*pitch,w-32,pitch)
-   F.text(label:upper(),16,b.y+(b.h-25)//2,F.fit(label,w-32,20));if i<#options then smudge.rect(16,b.y+b.h-1,w-32,1,true,true) end
+  local columns=h<600 and 2 or 1
+  local rows=(#options+columns-1)//columns
+  local pitch=math.min(76,(h-119-100)//rows)
+  for i,label in ipairs(options) do local width=(w-32)//columns;local x=16+(i-1)%columns*width
+   local b=F.box(x,119+(i-1)//columns*pitch,width,pitch)
+   F.text(label:upper(),x+4,b.y+(b.h-25)//2,F.fit(label,width-12,20));smudge.rect(x,b.y+b.h-1,width-4,1,true,true)
    if choice==i then F.corners(b,10,2) end;hit(b,'option',i)
   end
   button('BACK',footer,'resume')
@@ -162,6 +180,11 @@ function on_draw()
 end
 function on_button(btn,pressed)
  if not pressed or closed then return end
+ if keySettings then keySettings.button(btn);return end
+ if editor then
+  if btn=='back' then editor.cancel();editor=nil;screen='note';redraw()else editor.button(btn)end
+  return
+ end
  if screen=='note' and (btn=='page_back' or btn=='page_forward') then viewPage=math.max(1,math.min(#pages,viewPage+(btn=='page_forward' and 1 or -1)));redraw();return end
  if btn=='page_back' then btn='up' elseif btn=='page_forward' then btn='down' end
  if btn=='back' then
@@ -200,6 +223,8 @@ function on_button(btn,pressed)
 end
 function on_touch(x,y,event)
  if event~='tap' or closed or x<0 or y<0 or x>=w or y>=h then return end
+ if keySettings then keySettings.touch(x,y);return end
+ if editor then editor.touch(x,y);return end
  local item=F.at(hits,x,y);if not item then return end
  local action=item.action;local value=item.value
  if action=='library' then choice=value;on_button('confirm',true)
@@ -214,12 +239,14 @@ function on_touch(x,y,event)
 end
 function on_swipe(dir)
  if closed then return end
+ if keySettings then return end
+ if editor then return end
  if screen=='note' then if dir=='up' or dir=='left' then on_button('page_forward',true) elseif dir=='down' or dir=='right' then on_button('page_back',true) end
  elseif screen=='library' then
   local capacity=math.max(1,(h-68-12-119+12)//116)
   choice=math.max(1,math.min(8,choice+((dir=='up' or dir=='left') and capacity or -capacity)));redraw()
  else on_button(dir,true) end
 end
-function on_update()end
-function on_exit()if loaded then save() end;closed=true;if original then pcall(smudge.set_orientation,original) end end
+function on_update()if editor then editor.update()end end
+function on_exit()if keySettings then keySettings.cancel();keySettings=nil end;if editor then editor.cancel();editor=nil end;if loaded then save() end;closed=true;if original then pcall(smudge.set_orientation,original) end end
 return {state=function()return doc,lines,screen,index end,hits=function()return hits end,pages=function()return pages,viewPage end}
