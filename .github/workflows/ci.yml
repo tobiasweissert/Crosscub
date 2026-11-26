@@ -106,16 +106,6 @@ jobs:
               assert '6.1.19' in subprocess.check_output([exe, '--version'], text=True)
           PY
 
-      - name: Require recipient-encrypted analyzer retention
-        id: recipient
-        env:
-          RECIPIENT_CERT: ${{ vars.CROSSCUB_ARTIFACT_RECIPIENT_CERT }}
-        run: |
-          set -euo pipefail
-          umask 077
-          printf '%s\n' "$RECIPIENT_CERT" > "$RUNNER_TEMP/crosscub-recipient.pem"
-          python3 scripts/seal_ci_artifacts.py validate-cert --cert "$RUNNER_TEMP/crosscub-recipient.pem"
-
       - name: Run cppcheck
         id: analyzer
         run: |
@@ -123,26 +113,7 @@ jobs:
           umask 077
           export CROSSCUB_PRIVATE_EVIDENCE="$GITHUB_WORKSPACE/cppcheck-evidence"
           mkdir -p "$CROSSCUB_PRIVATE_EVIDENCE"
-          python3 scripts/ci_cppcheck_capture.py check --verbose --fail-on-defect low --fail-on-defect medium --fail-on-defect high > cppcheck-evidence/check.log 2>&1
-
-      - name: Seal analyzer failure diagnostics
-        if: always() && steps.recipient.outcome == 'success' && steps.analyzer.outcome != 'skipped'
-        id: seal
-        run: |
-          set -euo pipefail
-          python3 scripts/seal_ci_artifacts.py seal --evidence cppcheck-evidence --cert "$RUNNER_TEMP/crosscub-recipient.pem" --output cppcheck-sealed
-
-      - name: Retain encrypted analyzer diagnostics
-        if: always() && steps.seal.outcome == 'success'
-        uses: actions/upload-artifact@v7
-        with:
-          name: crosscub-cppcheck-sealed-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            cppcheck-sealed/sealed.envelope
-            cppcheck-sealed/receipt.json
-          if-no-files-found: error
-          retention-days: 31
-          compression-level: 0
+          python3 scripts/ci_cppcheck_capture.py check --verbose --fail-on-defect low --fail-on-defect medium --fail-on-defect high 2>&1 | tee cppcheck-evidence/check.log
 
   build:
     # Standard Sticky uses approved packing; the manual compatibility alias is equivalent.
@@ -232,17 +203,7 @@ jobs:
       - name: Test offline cold qualification contract
         run: python3 -B -m unittest discover -s test/ota_release -p test_cold_qualification.py -v
 
-      - name: Require recipient-encrypted artifact retention
-        id: recipient
-        env:
-          RECIPIENT_CERT: ${{ vars.CROSSCUB_ARTIFACT_RECIPIENT_CERT }}
-        run: |
-          set -euo pipefail
-          umask 077
-          printf '%s\n' "$RECIPIENT_CERT" > "$RUNNER_TEMP/crosscub-recipient.pem"
-          python3 scripts/seal_ci_artifacts.py validate-cert --cert "$RUNNER_TEMP/crosscub-recipient.pem"
-
-      - name: Test authenticated artifact sealing
+      - name: Test readable diagnostics and artifact boundary
         run: python3 -m unittest discover -s test/ota_release -p test_artifact_privacy.py -v
 
       - name: Record approved source before build
@@ -268,13 +229,13 @@ jobs:
           SCONSFLAGS: --keep-going
         run: |
           set -euo pipefail
-          # Raw diagnostics (including runner paths) stay inside the sealed evidence.
+          # Compiler diagnostics are public; staged ELF/map/config evidence stays on the runner.
           umask 077
           export CROSSCUB_PRIVATE_EVIDENCE="$GITHUB_WORKSPACE/sticky-evidence"
           export CROSSCUB_PROJECT_SCRIPTS="$GITHUB_WORKSPACE/scripts"
           : > "pio-$PIO_ENV.log"
-          python3 scripts/ci_producer_capture.py --producer "$HOME/.platformio/platforms/espressif32/builder/frameworks/espidf.py" > "pio-$PIO_ENV.log" 2>&1
-          pio run --verbose -j1 -e "$PIO_ENV" >> "pio-$PIO_ENV.log" 2>&1
+          python3 scripts/ci_producer_capture.py --producer "$HOME/.platformio/platforms/espressif32/builder/frameworks/espidf.py" 2>&1 | tee "pio-$PIO_ENV.log"
+          pio run --verbose -j1 -e "$PIO_ENV" 2>&1 | tee -a "pio-$PIO_ENV.log"
 
       - name: Stage exact Sticky BIN ELF and provenance
         if: always() && steps.firmware.outcome != 'skipped'
@@ -432,29 +393,6 @@ jobs:
           PY
           test "$startup_capture_status" -eq 0
 
-      - name: Seal exact Sticky evidence including failed-build diagnostics
-        if: always() && steps.recipient.outcome == 'success' && steps.firmware.outcome != 'skipped'
-        id: seal
-        run: |
-          set -euo pipefail
-          python3 scripts/seal_ci_artifacts.py seal --evidence sticky-evidence --cert "$RUNNER_TEMP/crosscub-recipient.pem" --output sticky-sealed
-
-      - name: Retain encrypted Sticky evidence
-        if: always() && steps.seal.outcome == 'success'
-        uses: actions/upload-artifact@v7
-        with:
-          name: crosscub-sticky-sealed-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            sticky-sealed/sealed.envelope
-            sticky-sealed/receipt.json
-          if-no-files-found: error
-          # Provider expiry starts before created_at; request a margin above the
-          # strictly verified minimum of 30 creation-relative days.
-          retention-days: 31
-          compression-level: 0
-
-      # Keep portable diagnostics after real compilation and evidence retention.
-      # A harness portability defect must not prevent the first firmware build.
       - name: Check portable docs and workflow policy
         run: python3 -m unittest discover -s test/crosspoint_migration/docs-ci -v
 

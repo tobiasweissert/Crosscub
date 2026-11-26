@@ -46,77 +46,33 @@ class ArtifactPrivacyTests(unittest.TestCase):
                                    RELEASE_VERSION='1.6.5.4')
             self.assertNotEqual(result.returncode, 0)
 
-    def test_failed_build_diagnostics_are_private_and_recipient_sealed(self):
+    def test_readable_diagnostics_preserve_producer_exit_without_recipient(self):
         workflow = steps()
-        self.assertIn('Require recipient-encrypted artifact retention', workflow)
-        recipient = workflow['Require recipient-encrypted artifact retention']
-        self.assertIn('vars.CROSSCUB_ARTIFACT_RECIPIENT_CERT', recipient)
-        self.assertIn('umask 077', recipient)
-        build = workflow['Build Crosscub Sticky']
-        self.assertIn('id: firmware', build)
-        self.assertNotIn('tee', build)
-        stage = workflow['Stage private release evidence']
-        seal = workflow['Seal private release evidence']
-        for step in [stage, seal]:
-            self.assertIn("always() && steps.recipient.outcome == 'success' && steps.firmware.outcome != 'skipped'", step)
-        upload = workflow['Retain encrypted release evidence']
-        self.assertIn("always() && steps.seal.outcome == 'success'", upload)
-        self.assertIn('release-sealed/sealed.envelope', upload)
-        self.assertIn('release-sealed/receipt.json', upload)
-        self.assertIn('retention-days: 31', upload)
-        self.assertIn('compression-level: 0', upload)
+        text = (ROOT / '.github/workflows/release.yml').read_text()
+        self.assertNotIn('RECIPIENT_CERT', text)
+        self.assertNotIn('seal_ci_artifacts.py', text)
+        self.assertNotIn('release-private', text)
         public = workflow['Upload qualified firmware artifact']
         self.assertNotIn('always()', public)
-        self.assertIn('release-qualified/crosscub-sticky-v${{ needs.prepare-release.outputs.release_version }}.bin', public)
-        self.assertIn('release-qualified/ota-validation.json', public)
-        with tempfile.TemporaryDirectory(prefix='synthetic-sealed-release-') as tmp:
+        paths = re.search(r'          path: \|\n((?:            .+\n)+)', public)[1]
+        self.assertEqual([line.strip() for line in paths.splitlines()], [
+            'release-qualified/crosscub-sticky-v${{ needs.prepare-release.outputs.release_version }}.bin',
+            'release-qualified/ota-validation.json'])
+        self.assertEqual(text.count('uses: actions/upload-artifact@'), 1)
+        with tempfile.TemporaryDirectory(prefix='synthetic-readable-release-') as tmp:
             cwd = Path(tmp)
-            (cwd / 'scripts').symlink_to(ROOT / 'scripts', target_is_directory=True)
-            tools = cwd / 'tools'; tools.mkdir()
+            tools = cwd / 'tools'
+            tools.mkdir()
             pio = tools / 'pio'
-            pio.write_text('#!/bin/bash\nif [[ "$1" == run ]]; then echo PRIVATE_LOG_CANARY; exit 23; fi\necho SYNTHETIC_TOOL_METADATA\n')
+            pio.write_text('#!/bin/bash\necho COMPILER_STDOUT_CANARY\necho COMPILER_STDERR_CANARY >&2\nexit "$SYNTHETIC_EXIT"\n')
             pio.chmod(0o700)
-            env = dict(PATH=str(tools) + os.pathsep + os.environ['PATH'], RUNNER_TEMP=str(cwd),
-                       GITHUB_REPOSITORY='tobiasweissert/Crosscub', GITHUB_SHA='a'*40,
-                       GITHUB_RUN_ID='1', GITHUB_RUN_ATTEMPT='1')
-            generated = subprocess.run(['openssl', 'req', '-x509', '-newkey', 'rsa:3072',
-                '-nodes', '-keyout', str(cwd / 'synthetic.key'), '-out', str(cwd / 'synthetic.pem'),
-                '-days', '32', '-subj', '/CN=SYNTHETIC-NOT-PRODUCTION'], capture_output=True)
-            self.assertEqual(generated.returncode, 0)
-            cert = (cwd / 'synthetic.pem').read_text()  # Public synthetic certificate only.
-            result = self.run_step('Require recipient-encrypted artifact retention', cwd,
-                                   **env, RECIPIENT_CERT='not a certificate')
-            self.assertNotEqual(result.returncode, 0)
-            result = self.run_step('Require recipient-encrypted artifact retention', cwd,
-                                   **env, RECIPIENT_CERT=cert)
-            self.assertEqual(result.returncode, 0, result.stderr)
-            result = self.run_step('Build Crosscub Sticky', cwd, **env)
-            self.assertEqual(result.returncode, 23)
-            self.assertNotIn(b'PRIVATE_LOG_CANARY', result.stdout + result.stderr)
-            builddir = cwd / '.pio/build/sticky'; builddir.mkdir(parents=True)
-            expected = {'firmware.elf': b'PRIVATE_ELF_CANARY', 'firmware.map': b'PRIVATE_MAP_CANARY',
-                        'firmware.bin': b'SYNTHETIC NOT FIRMWARE', 'bootloader.bin': b'BOOT_CANARY',
-                        'partitions.bin': b'PARTITION_CANARY'}
-            for name, data in expected.items():
-                (builddir / name).write_bytes(data)
-            for name in ['Stage private release evidence', 'Seal private release evidence']:
-                result = self.run_step(name, cwd, **env)
-                self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertNotIn(b'PRIVATE_', result.stdout + result.stderr)
-            sealed = cwd / 'release-sealed'
-            self.assertEqual({p.name for p in sealed.iterdir()}, {'sealed.envelope', 'receipt.json'})
-            for path in sealed.iterdir():
-                self.assertNotIn(b'PRIVATE_', path.read_bytes())
-            result = subprocess.run(['python3', str(ROOT / 'scripts/seal_ci_artifacts.py'), 'unseal',
-                '--envelope', str(sealed / 'sealed.envelope'), '--receipt', str(sealed / 'receipt.json'),
-                '--cert', str(cwd / 'synthetic.pem'), '--key', str(cwd / 'synthetic.key'),
-                '--output', str(cwd / 'recovered')], capture_output=True)
-            self.assertEqual(result.returncode, 0, result.stderr)
-            for name, data in expected.items():
-                self.assertEqual((cwd / 'recovered' / name).read_bytes(), data)
-            self.assertIn(b'PRIVATE_LOG_CANARY', (cwd / 'recovered/release-build.log').read_bytes())
-            # Metadata failure must not discard bytes already staged for failed builds.
-            self.assertTrue((cwd / 'recovered/provenance.log').exists())
+            for code in (0, 23):
+                result = self.run_step('Build Crosscub Sticky', cwd,
+                    PATH=str(tools) + os.pathsep + os.environ['PATH'], SYNTHETIC_EXIT=str(code))
+                self.assertEqual(result.returncode, code, result.stderr)
+                for canary in (b'COMPILER_STDOUT_CANARY', b'COMPILER_STDERR_CANARY'):
+                    self.assertIn(canary, result.stdout + result.stderr)
+                    self.assertIn(canary, (cwd / 'release-build.log').read_bytes())
 
 
 if __name__ == '__main__':

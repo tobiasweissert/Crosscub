@@ -16,7 +16,7 @@ class Policy(unittest.TestCase):
         self.assertIsNotNone(shutil.which('node'), 'Node is required for the actual web-script contract probe')
         subprocess.run(['node', str(Path(__file__).with_name('web_contract.js'))], cwd=ROOT, check=True, timeout=20)
 
-    def test_standard_build_archives_before_stats(self):
+    def test_standard_build_validates_locally_without_public_debug_uploads(self):
         text = (ROOT / '.github/workflows/ci.yml').read_text()
         self.assertIn('workflow_dispatch:', text)
         self.assertIn('pioarduino==6.1.19', text)
@@ -25,24 +25,14 @@ class Policy(unittest.TestCase):
         self.assertIn('firmware.elf', text)
         self.assertIn('image-validation.json', text)
         self.assertIn('toolchain-manifest.json', text)
-        self.assertLess(text.index('name: Seal exact Sticky evidence'), text.index('name: Retain encrypted Sticky evidence'))
-        self.assertLess(text.index('name: Retain encrypted Sticky evidence'), text.index('name: Extract firmware stats'))
-        self.assertLess(text.index('name: Retain encrypted Sticky evidence'),
+        self.assertLess(text.index('name: Stage exact Sticky BIN ELF and provenance'),
                         text.index('name: Check portable docs and workflow policy'))
         self.assertNotIn('github.event.repository.private', text)
-        self.assertIn('vars.CROSSCUB_ARTIFACT_RECIPIENT_CERT', text)
-        self.assertIn("if: always() && steps.seal.outcome == 'success'", text)
-        uploads = text[text.index('      - name: Retain encrypted Sticky evidence'):text.index('      - name: Extract firmware stats')]
-        upload_paths = re.search(r'(?m)^          path: \|\n((?:            .+\n)+)', uploads)
-        self.assertIsNotNone(upload_paths)
-        self.assertEqual([p.strip() for p in upload_paths[1].splitlines()],
-                         ['sticky-sealed/sealed.envelope', 'sticky-sealed/receipt.json'])
-        self.assertIn("if: always() && steps.recipient.outcome == 'success' && steps.firmware.outcome != 'skipped'", text)
-        self.assertIn('retention-days: 31', uploads)
-        self.assertNotIn('tee pio-sticky.log', text)
-        self.assertNotIn('sticky-evidence/', uploads)
-        self.assertNotIn('*.elf', uploads)
-        self.assertNotIn('*.bin', uploads)
+        self.assertNotIn('RECIPIENT_CERT', text)
+        self.assertNotIn('seal_ci_artifacts.py', text)
+        self.assertNotIn('uses: actions/upload-artifact@', text)
+        self.assertIn("if: always() && steps.firmware.outcome != 'skipped'", text)
+        self.assertIn('test "$startup_capture_status" -eq 0', text)
         self.assertNotIn('contents: write', text)
         self.assertNotIn('gh release', text)
         self.assertNotIn('secrets.RELEASE_PAT', text)
@@ -69,12 +59,30 @@ class Policy(unittest.TestCase):
         build = text.split('      - name: Build ${{ matrix.environment }} firmware', 1)[1]
         build = build.split('      - name: Stage exact Sticky BIN ELF and provenance', 1)[0]
         commands = re.findall(r'(?m)^          pio run .+$', build)
-        self.assertEqual(commands, ['          pio run --verbose -j1 -e "$PIO_ENV" >> "pio-$PIO_ENV.log" 2>&1'])
-        analyzer = text.split('      - name: Run cppcheck', 1)[1].split('      - name: Seal analyzer', 1)[0]
-        self.assertIn('python3 scripts/ci_cppcheck_capture.py check --verbose --fail-on-defect low --fail-on-defect medium --fail-on-defect high > cppcheck-evidence/check.log 2>&1', analyzer)
+        self.assertEqual(commands, ['          pio run --verbose -j1 -e "$PIO_ENV" 2>&1 | tee -a "pio-$PIO_ENV.log"'])
+        analyzer = text.split('      - name: Run cppcheck', 1)[1].split('  build:', 1)[0]
+        self.assertIn('python3 scripts/ci_cppcheck_capture.py check --verbose --fail-on-defect low --fail-on-defect medium --fail-on-defect high 2>&1 | tee cppcheck-evidence/check.log', analyzer)
         self.assertNotIn('continue-on-error', analyzer)
-        self.assertIn('cppcheck-sealed/sealed.envelope', text)
+        self.assertIn('set -euo pipefail', analyzer)
         self.assertNotIn('path: cppcheck-evidence', text)
+
+    def test_analyzer_readable_streams_and_exact_failure_exit(self):
+        workflow = (ROOT / '.github/workflows/ci.yml').read_text()
+        analyzer = workflow.split('      - name: Run cppcheck\n', 1)[1].split('  build:', 1)[0]
+        body = textwrap.dedent(analyzer.split('        run: |\n', 1)[1].split('      - name:', 1)[0])
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            tool = root / 'python3'
+            tool.write_text('#!/bin/sh\necho ANALYZER_STDOUT\necho ANALYZER_STDERR >&2\nexit "$SYNTHETIC_EXIT"\n')
+            tool.chmod(0o700)
+            for code in (0, 29):
+                result = subprocess.run(['bash', '-c', body], cwd=root, capture_output=True,
+                    env={**os.environ, 'PATH': str(root) + os.pathsep + os.environ['PATH'],
+                         'GITHUB_WORKSPACE': str(root), 'SYNTHETIC_EXIT': str(code)})
+                self.assertEqual(result.returncode, code, result.stderr)
+                for canary in (b'ANALYZER_STDOUT', b'ANALYZER_STDERR'):
+                    self.assertIn(canary, result.stdout + result.stderr)
+                    self.assertIn(canary, (root / 'cppcheck-evidence/check.log').read_bytes())
 
     def test_release_is_owner_sticky_and_guarded(self):
         text = (ROOT / '.github/workflows/release.yml').read_text()

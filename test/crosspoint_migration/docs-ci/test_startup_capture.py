@@ -678,7 +678,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertLess(workflow.index("trap 'test -f sticky-evidence/image-validation.json"), workflow.index('startup_capture_status=0'))
         self.assertLess(workflow.index('startup_capture_status=0'), workflow.index("(out/'artifact-sha256.json').write_text"))
         self.assertIn('          test "$startup_capture_status" -eq 0', workflow)
-        self.assertIn('retention-days: 31', workflow)
+        self.assertNotIn('uses: actions/upload-artifact@', workflow)
         with tempfile.TemporaryDirectory(prefix='startup-stage-', dir=os.environ.get('TMPDIR')) as tmp:
             root = Path(tmp)
             (root / 'scripts').mkdir()

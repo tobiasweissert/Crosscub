@@ -212,17 +212,13 @@ class Workflow(unittest.TestCase):
         self.assertLess(build.index('scripts/check_sticky_cold_state.py fresh'), build.index('pio pkg install'))
         self.assertLess(build.index('pio pkg install'), build.index('scripts/check_sticky_cold_state.py coherent'))
         self.assertLess(build.index('scripts/check_sticky_cold_state.py coherent'), build.index('pio run --verbose'))
-        self.assertLess(build.index('seal_ci_artifacts.py validate-cert'), build.index('pio run --verbose'))
+        self.assertNotIn('RECIPIENT_CERT', text)
+        self.assertNotIn('seal_ci_artifacts.py', text)
+        self.assertNotIn('uses: actions/upload-artifact@', text)
         frozen = {
-            'Build ${{ matrix.environment }} firmware': '483c9fd765d7c1a3e67f59032d15c0dbe229e5f2612b1d68a92d5e86393040cb',
-            'Stage exact Sticky BIN ELF and provenance': '25c88ced542ad2a90e7adeb9d7d7aff202ac78c651de5e8830072a5d53139e76',
-            'Seal exact Sticky evidence including failed-build diagnostics': '008fdbf9069325a6dadebe9232b78a07ddb1cb06c8c4fda2cdf59d7ec13784c7',
-            'Retain encrypted Sticky evidence': '46dd631d14dc94c5d87e899741efb1007d10e850b2c3d0d21b9b43239f08fb8f',
-            'Require recipient-encrypted artifact retention': '7e5b077917b0ec672ee31a8c81329c12d4c00d609276d645cc6f2f2f9adadbc0'}
+            'Stage exact Sticky BIN ELF and provenance': '25c88ced542ad2a90e7adeb9d7d7aff202ac78c651de5e8830072a5d53139e76'}
         for name, expected in frozen.items():
             self.assertEqual(hashlib.sha256(self.blocks()[name].encode()).hexdigest(), expected, name)
-        cppcheck = text.split('  cppcheck:\n')[1].split('  build:\n')[0]
-        self.assertEqual(hashlib.sha256(cppcheck.encode()).hexdigest(), 'e71cf795dc6dd7ee389ee8e52d07f53156245b874bd18ada184d3f32b373c454')
 
     def test_actual_fresh_coherent_shell_blocks_with_synthetic_home(self):
         import subprocess
@@ -274,7 +270,7 @@ class Workflow(unittest.TestCase):
             self.assertEqual(result.returncode, 1)
             self.assertEqual((reused / 'canary').read_bytes(), b'synthetic reused state')
 
-    def test_actual_ci_failed_build_capture_staging_and_sealing(self):
+    def test_actual_ci_failed_build_readable_capture_and_local_staging(self):
         import shlex
         import subprocess
         import sys
@@ -287,17 +283,23 @@ class Workflow(unittest.TestCase):
             tools.mkdir()
             # Synthetic producer command boundary, never an SDK fixture/edit.
             (tools / 'python3').write_text('#!/bin/bash\nif [[ "$1" == scripts/ci_producer_capture.py ]]; then echo SYNTHETIC_PRODUCER; exit "${SYNTHETIC_CAPTURE_EXIT:-0}"; fi\nexec ' + shlex.quote(sys.executable) + ' "$@"\n')
-            (tools / 'pio').write_text('#!/bin/bash\nif [[ "$1" == run ]]; then echo PRIVATE_SYNTHETIC_BUILD_CANARY; exit 23; fi\necho SYNTHETIC_PACKAGE_QUERY\n')
+            (tools / 'pio').write_text('#!/bin/bash\nif [[ "$1" == run ]]; then echo PRIVATE_SYNTHETIC_BUILD_CANARY; echo SYNTHETIC_COMPILER_STDERR >&2; exit "${SYNTHETIC_BUILD_EXIT:-23}"; fi\necho SYNTHETIC_PACKAGE_QUERY\n')
             (tools / 'git').write_text('#!/bin/sh\nexit 0\n')
             for path in tools.iterdir():
                 path.chmod(0o700)
             env = {**os.environ, 'PATH': str(tools) + os.pathsep + os.environ['PATH'], 'HOME': str(root), 'PIO_ENV': 'sticky', 'GITHUB_WORKSPACE': str(root), 'RUNNER_TEMP': str(root), 'GITHUB_REPOSITORY': 'tobiasweissert/Crosscub', 'GITHUB_SHA': 'a' * 40, 'GITHUB_RUN_ID': '1', 'GITHUB_RUN_ATTEMPT': '1'}
             def run(name, **extra):
                 return subprocess.run(['bash', '-c', self.script(name)], cwd=root, env={**env, **extra}, capture_output=True)
-            for capture, expected in [('37', 37), ('0', 23)]:
-                result = run('Build ${{ matrix.environment }} firmware', SYNTHETIC_CAPTURE_EXIT=capture)
+            for capture, compiler, expected in [('37', '23', 37), ('0', '23', 23), ('0', '0', 0)]:
+                result = run('Build ${{ matrix.environment }} firmware', SYNTHETIC_CAPTURE_EXIT=capture,
+                             SYNTHETIC_BUILD_EXIT=compiler)
                 self.assertEqual(result.returncode, expected)
-                self.assertNotIn(b'PRIVATE_SYNTHETIC_BUILD_CANARY', result.stdout + result.stderr)
+                self.assertIn(b'SYNTHETIC_PRODUCER', result.stdout + result.stderr)
+                if capture == '0':
+                    self.assertIn(b'PRIVATE_SYNTHETIC_BUILD_CANARY', result.stdout + result.stderr)
+                    self.assertIn(b'SYNTHETIC_COMPILER_STDERR', result.stdout + result.stderr)
+                else:
+                    self.assertNotIn(b'PRIVATE_SYNTHETIC_BUILD_CANARY', result.stdout + result.stderr)
             build = root / '.pio/build/sticky'
             build.mkdir(parents=True)
             for name in ('firmware.elf', 'firmware.bin', 'firmware.map'):
@@ -307,15 +309,6 @@ class Workflow(unittest.TestCase):
             for name in ('firmware.elf', 'firmware.bin', 'firmware.map'):
                 self.assertEqual((root / 'sticky-evidence' / name).read_bytes(), (build / name).read_bytes())
             self.assertIn(b'PRIVATE_SYNTHETIC_BUILD_CANARY', (root / 'sticky-evidence/build.log').read_bytes())
-            generated = subprocess.run(['openssl', 'req', '-x509', '-newkey', 'rsa:3072', '-nodes', '-keyout', str(root / 'synthetic.key'), '-out', str(root / 'synthetic.pem'), '-days', '32', '-subj', '/CN=SYNTHETIC-NOT-PRODUCTION'], capture_output=True)
-            self.assertEqual(generated.returncode, 0)
-            result = run('Require recipient-encrypted artifact retention', RECIPIENT_CERT=(root / 'synthetic.pem').read_text())
-            self.assertEqual(result.returncode, 0, result.stderr)
-            result = run('Seal exact Sticky evidence including failed-build diagnostics')
-            self.assertEqual(result.returncode, 0, result.stderr)
-            result = subprocess.run([sys.executable, '-B', str(ROOT / 'scripts/seal_ci_artifacts.py'), 'unseal', '--envelope', str(root / 'sticky-sealed/sealed.envelope'), '--receipt', str(root / 'sticky-sealed/receipt.json'), '--cert', str(root / 'synthetic.pem'), '--key', str(root / 'synthetic.key'), '--output', str(root / 'recovered')], capture_output=True)
-            self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual((root / 'recovered/build.log').read_bytes(), (root / 'sticky-evidence/build.log').read_bytes())
 
     def test_cold_gate_and_actual_environment_block(self):
         text = (ROOT / '.github/workflows/ci.yml').read_text()

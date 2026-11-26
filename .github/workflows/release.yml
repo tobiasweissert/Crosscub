@@ -101,16 +101,6 @@ jobs:
 
       # Source INI versions must already match. Do not rewrite approved source
       # in CI or derive descriptor identity from a display/provenance suffix.
-      - name: Require recipient-encrypted artifact retention
-        id: recipient
-        env:
-          RECIPIENT_CERT: ${{ vars.CROSSCUB_ARTIFACT_RECIPIENT_CERT }}
-        run: |
-          set -euo pipefail
-          umask 077
-          printf '%s\n' "$RECIPIENT_CERT" > "$RUNNER_TEMP/crosscub-recipient.pem"
-          python3 scripts/seal_ci_artifacts.py validate-cert --cert "$RUNNER_TEMP/crosscub-recipient.pem"
-
       - name: Build Crosscub Sticky
         id: firmware
         env:
@@ -118,9 +108,9 @@ jobs:
           CROSSINK_RELEASE_VERSION: ${{ needs.prepare-release.outputs.release_version }}
         run: |
           set -euo pipefail
-          # Do not stream compiler diagnostics into public Actions logs.
+          # Compiler diagnostics are public; only validated BIN/report may be uploaded.
           umask 077
-          pio run -j1 -e sticky > release-build.log 2>&1
+          pio run -j1 -e sticky 2>&1 | tee release-build.log
       - name: Validate exact OTA image before artifact upload
         env:
           RELEASE_VERSION: ${{ needs.prepare-release.outputs.release_version }}
@@ -130,45 +120,6 @@ jobs:
             --firmware ".pio/build/sticky/crosscub-sticky-v$RELEASE_VERSION.bin" \
             --report release-qualified/ota-validation.json
           cp ".pio/build/sticky/crosscub-sticky-v$RELEASE_VERSION.bin" release-qualified/
-      - name: Stage private release evidence
-        if: always() && steps.recipient.outcome == 'success' && steps.firmware.outcome != 'skipped'
-        run: |
-          set -euo pipefail
-          umask 077
-          mkdir -p release-private
-          # Primary bytes first; missing outputs are expected after a failed build.
-          for file in .pio/build/sticky/*.bin .pio/build/sticky/*.elf .pio/build/sticky/*.map release-build.log; do
-            if [[ -f "$file" && ! -L "$file" ]]; then cp "$file" release-private/; fi
-          done
-          # Best-effort bounded metadata must never discard primary diagnostics.
-          {
-            git rev-parse HEAD HEAD^{tree} || true
-            git ls-tree -r HEAD || true
-            sha256sum platformio.ini platformio.local.example.ini || true
-            git diff HEAD -- platformio.ini platformio.local.example.ini || true
-            git -C freeink-sdk rev-parse HEAD || true
-            git -C freeink-sdk diff HEAD || true
-            pio --version || true
-            "$HOME/.platformio/penv/bin/pio" --version || true
-            pio pkg list -e sticky --json-output || true
-          } > release-private/provenance.log 2>&1
-      - name: Seal private release evidence
-        if: always() && steps.recipient.outcome == 'success' && steps.firmware.outcome != 'skipped'
-        id: seal
-        run: |
-          set -euo pipefail
-          python3 scripts/seal_ci_artifacts.py seal --evidence release-private --cert "$RUNNER_TEMP/crosscub-recipient.pem" --output release-sealed
-      - name: Retain encrypted release evidence
-        if: always() && steps.seal.outcome == 'success'
-        uses: actions/upload-artifact@v7
-        with:
-          name: release-sticky-sealed-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            release-sealed/sealed.envelope
-            release-sealed/receipt.json
-          if-no-files-found: error
-          retention-days: 31
-          compression-level: 0
       - name: Upload qualified firmware artifact
         uses: actions/upload-artifact@v7
         with:
