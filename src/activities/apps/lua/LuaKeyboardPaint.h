@@ -103,8 +103,16 @@ inline int snapshot(lua_State* L) {
   const char* text = luaL_checklstring(L, 2, &textSize);
   const lua_Integer cursor = luaL_checkinteger(L, 3), focus = luaL_optinteger(L, 6, 1),
                     language = luaL_optinteger(L, 9, -1);
+  const lua_Integer selection = luaL_optinteger(L, 10, 0), top = luaL_optinteger(L, 12, 0);
+  const bool masked = lua_toboolean(L, 11);
+  const char* movement = luaL_optstring(L, 13, "");
+  if (*movement && strcmp(movement, "up") && strcmp(movement, "down"))
+    return luaL_error(L, "invalid keyboard movement");
+  if (selection < 0 || selection > static_cast<lua_Integer>(textSize) + 1 || top < 0 ||
+      top > renderer->getScreenHeight() / 2)
+    return luaL_error(L, "invalid keyboard selection/viewport");
   if (language < -1 || language >= keyboard_layouts::COUNT || titleSize > 256 || textSize > 8192 || cursor < 1 ||
-      cursor > static_cast<lua_Integer>(textSize) + 1 || focus < 1 || focus > 56 || memchr(title, 0, titleSize) ||
+      cursor > static_cast<lua_Integer>(textSize) + 1 || focus < 0 || focus > 56 || memchr(title, 0, titleSize) ||
       memchr(text, 0, textSize))
     return luaL_error(L, "invalid keyboard snapshot");
   const bool touch = !lua_isnoneornil(L, 7), shifted = lua_toboolean(L, 4), symbols = lua_toboolean(L, 5);
@@ -113,14 +121,20 @@ inline int snapshot(lua_State* L) {
     lua_pushinteger(L, 0);
     return 1;
   }
-  if (touch) {
+  if (touch || *movement) {
     lua_Integer position = 0;
     {
       MappedInputManager input(gpio, *renderer);
       KeyboardEntryActivity owner(*renderer, input, std::string(title, titleSize), std::string(text, textSize));
-      position = owner.snapshotTouch(static_cast<size_t>(cursor - 1), symbols, static_cast<int>(x), static_cast<int>(y),
-                                     static_cast<int>(language)) +
-                 1;
+      if (*movement)
+        position =
+            owner.snapshotVertical(static_cast<size_t>(cursor - 1), symbols, strcmp(movement, "up") == 0 ? -1 : 1,
+                                   static_cast<int>(language), masked, static_cast<int>(top)) +
+            1;
+      else
+        position = owner.snapshotTouch(static_cast<size_t>(cursor - 1), symbols, static_cast<int>(x),
+                                       static_cast<int>(y), static_cast<int>(language), masked, static_cast<int>(top)) +
+                   1;
     }
     lua_pushinteger(L, position);
     return 1;
@@ -137,7 +151,8 @@ inline int snapshot(lua_State* L) {
     KeyboardEntryActivity owner(*renderer, input, std::string(title, titleSize), std::string(text, textSize));
     active = &owner;
     owner.paintSnapshot(static_cast<size_t>(cursor - 1), shifted, symbols, static_cast<int>(focus - 1),
-                        static_cast<int>(language));
+                        static_cast<int>(language), selection ? static_cast<size_t>(selection - 1) : std::string::npos,
+                        masked, static_cast<int>(top));
     status = lua_pcall(L, 1, 1, 0);
   }
   // Propagate only after all native owning objects have been destroyed.

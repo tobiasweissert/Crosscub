@@ -10,6 +10,7 @@
 #include <new>
 
 #include "NotesAudioQueue.h"
+#include "NotesKeyStore.h"
 #include "NotesRealtimeProtocol.h"
 #include "NotesRealtimeWire.h"
 #include "hal/NotesMicrophone.h"
@@ -166,20 +167,8 @@ bool NotesDictation::start() {
     idleStatus = "Connect Wi-Fi in Control Center first";
     return false;
   }
-  HalFile file;
-  if (!Storage.openFileForRead("NSTT", "/.crosspoint/notes-openai.key", file)) {
-    idleStatus = "OpenAI key not configured";
-    return false;
-  }
-  std::string key;
-  const size_t n = file.size();
-  if (n > 0 && n <= 514) {
-    key.resize(n);
-    if (file.read(reinterpret_cast<uint8_t*>(&key[0]), n) != static_cast<int>(n)) key.clear();
-  }
-  file.close();
-  while (!key.empty() && (key.back() == '\n' || key.back() == '\r')) key.pop_back();
-  if (!notes::validKey(key)) {
+  notes::keys::Buffer secret;
+  if (!notes::keys::read(secret)) {
     idleStatus = "OpenAI key missing or invalid";
     return false;
   }
@@ -198,7 +187,7 @@ bool NotesDictation::start() {
     idleStatus = "Not enough PSRAM";
     return false;
   }
-  next->key.swap(key);
+  next->key.assign(secret.bytes, secret.size);
   next->running.store(true);
   impl = std::move(next);
   if (xTaskCreate(Impl::networkEntry, "notes-stt", 12288, impl.get(), 1, nullptr) != pdPASS) {

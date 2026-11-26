@@ -25,7 +25,7 @@ on_touch(w-54,28,'tap');assert(starts==1)
 providerText='Hello';providerStatus='Listening';on_update();on_draw();assert(current=='Hello')
 on_touch(25,320,'tap');on_draw();assert(current=='Hello!')
 providerText='Hello world';on_update();on_draw();assert(current=='Hello! world')
-for _,point in ipairs({{57,320},{w-1,h-1},{180,57}})do -- key gap, unused area, non-input header
+for _,point in ipairs({{57,320},{w-1,h-1},{100,8}})do -- key gap, unused area, non-input header
  on_touch(point[1],point[2],'tap');on_draw();assert(current=='Hello! world')
  local _,_,screen=api.state();assert(screen=='edit')
 end
@@ -43,7 +43,7 @@ local again=dofile('sticky_enhanced.lua');on_init();on_button('confirm',true);as
 local N=dofile('core.lua');local F=dofile('graphics.lua');F.init()
 local draft=dofile('dictation_editor.lua')('Unsaved',function(value)assert(value=='Unsaved!');return true end,N.validate)
 draft.draw('Note',F);draft.touch(100,120);assert(draft.cursor==1)
-for _,point in ipairs({{57,320},{w-1,h-1},{180,57}})do
+for _,point in ipairs({{57,320},{w-1,h-1},{100,8}})do
  draft.touch(point[1],point[2]);draft.draw('Note',F);assert(draft.cursor==1 and draft.value=='Unsaved')
 end
 draft.touch(200,120);assert(draft.cursor==#draft.value+1)

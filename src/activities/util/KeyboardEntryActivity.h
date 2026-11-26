@@ -37,8 +37,17 @@ class KeyboardEntryActivity : public Activity {
 
   // Synchronous paint-only snapshot for Lua-owned editors. No onEnter/loop,
   // activity-stack push, storage, completion callback or input ownership transfer.
-  void paintSnapshot(size_t cursor, bool shift, bool symbolLayer, int focus, int language = -1);
-  int snapshotTouch(size_t cursor, bool symbolLayer, int x, int y, int language = -1);
+  ~KeyboardEntryActivity() override {
+    if (snapshotMasked) {
+      volatile char* p = text.empty() ? nullptr : &text[0];
+      for (size_t i = 0; i < text.size(); ++i) p[i] = 0;
+    }
+  }
+  void paintSnapshot(size_t cursor, bool shift, bool symbolLayer, int focus, int language = -1,
+                     size_t selection = std::string::npos, bool masked = false, int top = 0);
+  int snapshotTouch(size_t cursor, bool symbolLayer, int x, int y, int language = -1, bool masked = false, int top = 0);
+  int snapshotVertical(size_t cursor, bool symbolLayer, int direction, int language = -1, bool masked = false,
+                       int top = 0);
   int snapshotLayoutIndex(bool next) const;
   const freeink::ui::InteractionBuffer<56>& paintedInteractions() const { return interactions; }
   const freeink::ui::KeyboardKey* paintedKey(int16_t value) const;
@@ -50,6 +59,10 @@ class KeyboardEntryActivity : public Activity {
   InputType inputType;
   size_t minLength;
   bool passwordVisible = false;
+  bool snapshotMasked = false;
+  size_t snapshotSelection = std::string::npos;
+  int snapshotTop = 0;
+  bool snapshotFocus = true;
 
   ButtonNavigator buttonNavigator;
 

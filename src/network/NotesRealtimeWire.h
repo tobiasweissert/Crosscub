@@ -3,13 +3,16 @@
 #include <string>
 
 namespace notes {
-inline bool validKey(const std::string& key) {
-  if (key.empty() || key.size() > 512) return false;
-  for (unsigned char c : key)
+inline bool validKey(const char* key, size_t size) {
+  if (!size || size > 512) return false;
+  for (size_t i = 0; i < size; ++i) {
+    const unsigned char c = key[i];
     if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_'))
       return false;
+  }
   return true;
 }
+inline bool validKey(const std::string& key) { return validKey(key.data(), key.size()); }
 inline std::string base64(const std::string& bytes) {
   static constexpr char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
   std::string out;

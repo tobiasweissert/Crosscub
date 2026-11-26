@@ -1,5 +1,6 @@
 #pragma once
 #include "network/NotesDictation.h"
+#include "network/NotesKeyStore.h"
 
 namespace ink {
 inline NotesDictation& notesOwner(lua_State* L) {
@@ -46,6 +47,25 @@ inline void registerNotesDictation(lua_State* L, NotesDictation& owner) {
        [](lua_State* L) {
          notesOwner(L).cancel();
          return 0;
+       }},
+      {"notes_key_status",
+       [](lua_State* L) {
+         lua_pushboolean(L, notes::keys::configured());
+         return 1;
+       }},
+      {"notes_key_save",
+       [](lua_State* L) {
+         size_t size = 0;
+         const char* value = luaL_checklstring(L, 1, &size);
+         const bool ok = notes::keys::save(value, size);
+         lua_pushboolean(L, ok);
+         return 1;
+       }},
+      {"notes_key_clear",
+       [](lua_State* L) {
+         const bool ok = notes::keys::clear();
+         lua_pushboolean(L, ok);
+         return 1;
        }},
       {"notes_dictation_poll", notesPoll},
   };

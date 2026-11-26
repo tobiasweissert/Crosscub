@@ -116,7 +116,18 @@ const fui::KeyboardLayout URL_SNIPPET_LAYOUT{URL_SNIP_ROWS, 4};
 
 }  // namespace
 
-void KeyboardEntryActivity::paintSnapshot(size_t cursor, bool shift, bool symbolLayer, int focus, int language) {
+void KeyboardEntryActivity::paintSnapshot(size_t cursor, bool shift, bool symbolLayer, int focus, int language,
+                                          size_t selection, bool masked, int top) {
+  snapshotSelection = selection;
+  if (snapshotSelection != std::string::npos) {
+    snapshotSelection = std::min(snapshotSelection, text.size());
+    while (snapshotSelection > 0 && snapshotSelection < text.size() &&
+           (static_cast<uint8_t>(text[snapshotSelection]) & 0xc0) == 0x80)
+      --snapshotSelection;
+  }
+  snapshotFocus = focus >= 0;
+  snapshotMasked = masked;
+  snapshotTop = top;
   cursorPos = std::min(cursor, text.size());
   while (cursorPos > 0 && cursorPos < text.size() && (static_cast<uint8_t>(text[cursorPos]) & 0xc0) == 0x80)
     --cursorPos;
@@ -135,10 +146,15 @@ void KeyboardEntryActivity::paintSnapshot(size_t cursor, bool shift, bool symbol
   paint();
 }
 
-int KeyboardEntryActivity::snapshotTouch(size_t cursor, bool symbolLayer, int x, int y, int language) {
+int KeyboardEntryActivity::snapshotTouch(size_t cursor, bool symbolLayer, int x, int y, int language, bool masked,
+                                         int top) {
+  snapshotMasked = masked;
+  snapshotTop = top;
   cursorPos = std::min(cursor, text.size());
   layoutId = language >= 0 && language < keyboard_layouts::COUNT ? keyboard_layouts::ALL[language].id
                                                                  : keyboard_layouts::startingLayout();
+  while (cursorPos > 0 && cursorPos < text.size() && (static_cast<uint8_t>(text[cursorPos]) & 0xc0) == 0x80)
+    --cursorPos;
   const auto enabled = keyboard_layouts::enabled();
   showLangKey = (enabled & (enabled - 1)) != 0;
   symbols = symbolLayer;
@@ -151,6 +167,45 @@ int KeyboardEntryActivity::snapshotTouch(size_t cursor, bool symbolLayer, int x,
   if (inputFieldTouchTargetFromPoint(x, y, position) == InputFieldTouchTarget::Cursor)
     return static_cast<int>(position);
   return -1;
+}
+
+int KeyboardEntryActivity::snapshotVertical(size_t cursor, bool symbolLayer, int direction, int language, bool masked,
+                                            int top) {
+  snapshotTouch(cursor, symbolLayer, 0, 0, language, masked, top);
+  auto s = displayTextForCurrentState();
+  const auto& m = UITheme::getInstance().getMetrics();
+  const int pageWidth = renderer.getScreenWidth();
+  const int available = pageWidth - (deviceUsesSideButtonHintGutters(gpio) ? 2 * m.sideButtonHintsWidth : 0);
+  const int width = pageWidth - 2 * ((pageWidth - available * m.keyboardTextFieldWidthPercent / 100) / 2);
+  int start = 0, previous = 0, end;
+  while (true) {
+    end = lineBreakEnd(s, start, width);
+    if (cursorPos < static_cast<size_t>(end) || (cursorPos == static_cast<size_t>(end) && s[end] == '\n') ||
+        end == static_cast<int>(s.size()))
+      break;
+    previous = start;
+    start = end + (s[end] == '\n' ? 1 : 0);
+  }
+  const int lineWidth = measureRange(s, start, end);
+  int x = measureRange(s, start, static_cast<int>(cursorPos));
+  if (rangeIsRtl(s, start, end)) x = lineWidth - x;
+  if (m.keyboardCenteredText) x += (width - lineWidth) / 2;
+  int target = direction < 0 ? previous : end + (s[end] == '\n' ? 1 : 0);
+  if ((direction < 0 && start == 0) || (direction > 0 && end == static_cast<int>(s.size())))
+    return static_cast<int>(cursorPos);
+  const int targetEnd = lineBreakEnd(s, target, width);
+  const int targetWidth = measureRange(s, target, targetEnd);
+  if (m.keyboardCenteredText) x -= (width - targetWidth) / 2;
+  if (rangeIsRtl(s, target, targetEnd)) x = targetWidth - x;
+  int before = 0;
+  for (int p = target; p < targetEnd;) {
+    const int next = static_cast<int>(utf8Next(s, p));
+    const int through = measureRange(s, target, next);
+    if (x < (before + through) / 2) return p;
+    before = through;
+    p = next;
+  }
+  return targetEnd;
 }
 
 int KeyboardEntryActivity::snapshotLayoutIndex(bool next) const {
@@ -396,6 +451,7 @@ bool KeyboardEntryActivity::clearAllOrAltOnSelected() {
 }
 
 std::string KeyboardEntryActivity::displayTextForCurrentState() const {
+  if (snapshotMasked) return std::string(text.size(), '*');
   std::string displayText = text;
   if (inputType != InputType::Password || passwordVisible) {
     return displayText;
@@ -436,7 +492,9 @@ bool KeyboardEntryActivity::rangeIsRtl(std::string& s, const int start, const in
 }
 
 int KeyboardEntryActivity::lineBreakEnd(std::string& s, const int start, const int maxWidth) const {
-  const int len = static_cast<int>(s.length());
+  const size_t newline = s.find('\n', start);
+  const int len = static_cast<int>(newline == std::string::npos ? s.length() : newline);
+  if (start == len) return len;
   if (measureRange(s, start, len) <= maxWidth) return len;
   int lo = start + 1;
   int hi = len - 1;
@@ -550,7 +608,7 @@ KeyboardEntryActivity::InputFieldTouchTarget KeyboardEntryActivity::inputFieldTo
 #endif
 
     lineY += lineHeight;
-    lineStartIdx = lineEndIdx;
+    lineStartIdx = lineEndIdx + (displayText[lineEndIdx] == '\n' ? 1 : 0);
   }
 
   const int underlineBottom = lineY + lineHeight + metrics.verticalSpacing + 8;
@@ -569,7 +627,7 @@ int KeyboardEntryActivity::inputStartY() const {
   const auto& m = UITheme::getInstance().getMetrics();
   const int top = m.topPadding + TouchHeaderBackButton::height(m, mappedInput) + m.verticalSpacing;
 #if defined(FREEINK_DEVICE_STICKY) && FREEINK_DEVICE_STICKY
-  return top;
+  return std::max(top, snapshotTop);
 #else
   return top + m.verticalSpacing * 4 + m.keyboardVerticalOffset;
 #endif
@@ -584,12 +642,17 @@ int KeyboardEntryActivity::inputViewportStart(std::string& s, int width) const {
   int start = 0;
   while (start < static_cast<int>(s.size())) {
     const int end = lineBreakEnd(s, start, width);
-    if (cursorPos < static_cast<size_t>(end) || end == static_cast<int>(s.size())) break;
+    if (cursorPos < static_cast<size_t>(end) || (cursorPos == static_cast<size_t>(end) && s[end] == '\n') ||
+        end == static_cast<int>(s.size()))
+      break;
     ++cursorLine;
-    start = end;
+    start = end + (s[end] == '\n' ? 1 : 0);
   }
   int first = 0;
-  for (int i = 0; i <= cursorLine - lines; ++i) first = lineBreakEnd(s, first, width);
+  for (int i = 0; i <= cursorLine - lines; ++i) {
+    first = lineBreakEnd(s, first, width);
+    if (s[first] == '\n') ++first;
+  }
   return first;
 #else
   return 0;
@@ -873,7 +936,7 @@ void KeyboardEntryActivity::paint() {
   char displayCursorChar[8] = {};  // same span of displayText, masked for passwords
   if (cursorCharBytes > 0) {
     const size_t n = std::min(cursorCharBytes, sizeof(cursorChar) - 1);
-    memcpy(cursorChar, text.data() + cursorPos, n);
+    memcpy(cursorChar, (snapshotMasked ? displayText.data() : text.data()) + cursorPos, n);
     memcpy(displayCursorChar, displayText.data() + cursorPos, n);
   }
 
@@ -899,7 +962,7 @@ void KeyboardEntryActivity::paint() {
       const bool isLastLine = (lineEndIdx == static_cast<int>(displayText.length()));
       bool isCursorLine = false;
       if (!cursorDrawn && cursorPos >= lineStartIdx &&
-          (isLastLine ? cursorPos <= lineEndIdx : cursorPos < lineEndIdx)) {
+          (isLastLine || displayText[lineEndIdx] == '\n' ? cursorPos <= lineEndIdx : cursorPos < lineEndIdx)) {
         std::string beforeCursor;
         if (isPassword && !passwordVisible && cursorMode) {
           beforeCursor = std::string(cursorPos - lineStartIdx, '*');
@@ -943,6 +1006,22 @@ void KeyboardEntryActivity::paint() {
       } else {
         renderer.drawText(UI_12_FONT_ID, lineStartX, inputTopY + inputHeight, lineText.c_str());
       }
+      if (snapshotSelection != std::string::npos && snapshotSelection != cursorPos) {
+        const int first =
+            static_cast<int>(std::max(std::min(snapshotSelection, cursorPos), static_cast<size_t>(lineStartIdx)));
+        const int last =
+            static_cast<int>(std::min(std::max(snapshotSelection, cursorPos), static_cast<size_t>(lineEndIdx)));
+        const bool newlineSelected = displayText[lineEndIdx] == '\n' &&
+                                     std::min(snapshotSelection, cursorPos) <= static_cast<size_t>(lineEndIdx) &&
+                                     std::max(snapshotSelection, cursorPos) > static_cast<size_t>(lineEndIdx);
+        if (first < last || newlineSelected) {
+          const int before = measureRange(displayText, lineStartIdx, first);
+          const int through = measureRange(displayText, lineStartIdx, last);
+          const int x = isRtl ? lineStartX + textWidth - through : lineStartX + before;
+          renderer.invertRect(x, inputTopY + inputHeight, std::max(2, through - before + (newlineSelected ? 6 : 0)),
+                              lineHeight);
+        }
+      }
       if (lineEndIdx == static_cast<int>(displayText.length())) {
         break;
       }
@@ -951,7 +1030,7 @@ void KeyboardEntryActivity::paint() {
 #endif
 
       inputHeight += lineHeight;
-      lineStartIdx = lineEndIdx;
+      lineStartIdx = lineEndIdx + (displayText[lineEndIdx] == '\n' ? 1 : 0);
     }
   }
 
@@ -968,14 +1047,15 @@ void KeyboardEntryActivity::paint() {
     }
   } else if (cursorPos <= displayText.length()) {
     static constexpr int serifW = 3;
+    const bool caretBlack = snapshotSelection == std::string::npos || cursorPos >= snapshotSelection;
     const int cX = cursorPixelX;
     const int cY = cursorLineY;
     const int cBottom = cursorLineY + lineHeight - 1;
-    renderer.fillRect(cX, cY, 2, lineHeight, true);
-    renderer.drawLine(cX - serifW, cY, cX - 1, cY, 2, true);
-    renderer.drawLine(cX + 1, cY, cX + serifW, cY, 2, true);
-    renderer.drawLine(cX - serifW, cBottom, cX - 1, cBottom, 2, true);
-    renderer.drawLine(cX + 1, cBottom, cX + serifW, cBottom, 2, true);
+    renderer.fillRect(cX, cY, 2, lineHeight, caretBlack);
+    renderer.drawLine(cX - serifW, cY, cX - 1, cY, 2, caretBlack);
+    renderer.drawLine(cX + 1, cY, cX + serifW, cY, 2, caretBlack);
+    renderer.drawLine(cX - serifW, cBottom, cX - 1, cBottom, 2, caretBlack);
+    renderer.drawLine(cX + 1, cBottom, cX + serifW, cBottom, 2, caretBlack);
   }
 
   if (isPassword) {
@@ -1097,7 +1177,7 @@ void KeyboardEntryActivity::paint() {
   props.modeLabel =
       (symbols || (inputType == InputType::Url && urlPanel)) ? tr(STR_KEY_MODE_ABC) : tr(STR_KEY_MODE_SYMBOLS);
   props.inputMask = static_cast<uint16_t>(fui::InputTouch | fui::InputLongPress);
-  props.selectedIndex = cursorMode ? -1 : static_cast<int16_t>(selectedLogicalIndex());
+  props.selectedIndex = cursorMode || !snapshotFocus ? -1 : static_cast<int16_t>(selectedLogicalIndex());
   props.labelText.font = fui::GfxRendererTarget::FONT_BODY;
   props.altText.font = fui::GfxRendererTarget::FONT_SMALL;
   props.gap = static_cast<int16_t>(metrics.keyboardKeySpacing);

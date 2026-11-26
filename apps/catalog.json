@@ -1102,9 +1102,9 @@
     {
       "id": "cp-notes",
       "name": "Notes",
-      "version": "0.1.4",
+      "version": "0.1.5",
       "author": "CrossPlay contributors; Lua port",
-      "description": "Bounded app-local notes and checklists with manual imports; no phone or sleep-screen integration.",
+      "description": "Local notes, checklists and manual imports. Touch editing, on-device API key settings and microphone dictation require Crosscub firmware 2.0.5 or newer. Read PARITY.md for limitations.",
       "files": [
         "IMPORT.txt",
         "LICENSE-CrossPlay.txt",
@@ -1127,9 +1127,11 @@
         "art/sources.json",
         "compact.lua",
         "core.lua",
+        "dictation_editor.lua",
         "enhanced.lua",
         "graphics.lua",
         "icon.raw",
+        "key_settings.lua",
         "legacy_enhanced.lua",
         "legacy_graphics.lua",
         "main.lua",
