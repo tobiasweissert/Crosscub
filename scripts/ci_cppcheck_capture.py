@@ -21,14 +21,19 @@ def with_target_config(command, includes):
 
 
 def capture_execute(original, tool, command):
+    from ci_producer_capture import output_root, retain, save_receipt, bounded_diagnostic
+    out = output_root()
     if any(str(define).split('=', 1)[0] == 'CROSSPOINT_STATIC_BUILTINS'
            for define in getattr(tool, 'cpp_defines', ())):
-        command = with_target_config(command, tool.cpp_includes)
+        # Still require a compiler-selected configuration identity, but never
+        # trust warm/stock package bytes as the project's requested Kconfig.
+        with_target_config(command, tool.cpp_includes)
+        from cppcheck_target_config import prepare
+        header = prepare(tool, out, command)
+        command = [command[0], '--include=' + str(header), *command[1:]]
         import runpy
         exact = runpy.run_path(str(Path(__file__).with_name('cppcheck_exact.py')))
         command = [command[0], *exact['suppressions'](Path.cwd()), *command[1:]]
-    from ci_producer_capture import output_root, retain, save_receipt, bounded_diagnostic
-    out = output_root()
     if not (out/'cppcheck-generated-header-receipt.json').exists():
         files = {}
         retain(out, 'cppcheck-I18nKeys.h', Path.cwd()/'lib/I18n/I18nKeys.h', files)
