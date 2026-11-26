@@ -91,7 +91,8 @@ function on_update()
  local now=smudge.millis()
  local elapsed=now-last_tick -- int32 wrapping preserves short elapsed intervals.
  if elapsed<0 then last_tick=now;return end
- if elapsed<Core.interval(game) then return end
+ -- Accepted turns use the next painted frame instead of waiting another tick.
+ if elapsed<Core.interval(game) and not (game.queued and game.pending~=game.direction) then return end
  last_tick=now
  Core.step(game)
  if game.status=='over' or game.status=='won' then save_best();smudge.prevent_sleep(false) end

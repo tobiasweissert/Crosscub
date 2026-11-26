@@ -16,7 +16,7 @@ Eat the outlined rings. Walls and your own body end the run. A reverse direction
 
 The supplied screenshots define the white background, rounded segments, black head, outlined ring food, top-right score and large outlined state panel. Body segments and secondary lettering use stable monochrome dither instead of pretending that the panel has smooth LCD gray.
 
-Movement starts at one step per 350 ms and is capped at one step per painted Lua frame. Slow refreshes do not trigger a burst of unseen moves. Speed increases with scoring but never goes below 220 ms per step. Pause/ready screens do not continuously request redraws. Automatic sleep is prevented only while playing and released on pause, game over and exit. Actual panel latency and ghosting still require testing on the reader.
+Straight movement starts at one step per 350 ms and speeds up with scoring to 220 ms. Accepted perpendicular turns advance on the next available painted frame without waiting for that timer; each move resets the straight-movement timer. Repeated same-direction or rejected reverse swipes do not accelerate movement. All movement remains capped at one step per painted Lua frame, so slow refreshes do not trigger unseen catch-up moves. The firmware delivers swipes on finger release, and a frame already refreshing cannot be recalled. Pause/ready screens do not continuously request redraws. Automatic sleep is prevented only while playing and released on pause, game over and exit. Actual panel latency and ghosting still require testing on the reader.
 
 Portrait is 480 x 800; landscape scales the same 16 x 24 board without relocating its contents. Typography uses app-local, licensed Inter-derived bitmap glyphs called Snake Paper. See `FONT-SOURCE.json` and `OFL-Inter.txt`.
 
@@ -28,7 +28,7 @@ Copy the **snake** folder, including its manifest, Lua files, font binary assets
 /.crosssmudge/applications/snake/
 ```
 
-Use merge-copy; do not delete the reader's saved-data folder. Reopen Applications and select **Snake**. The existing App Store installation can be upgraded in place to 0.1.1; never uninstall it to repair input. Publication/readback receipts establish Store availability separately from physical installation and panel qualification.
+Use merge-copy; do not delete the reader's saved-data folder. Reopen Applications and select **Snake**. Version 0.1.2 is an app-only responsiveness candidate, not a published Store update. Never uninstall to repair input; publication and physical installation are separate checks.
 
 ## Verified candidate
 
