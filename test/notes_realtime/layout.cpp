@@ -108,6 +108,40 @@ int main() {
     KeyboardEntryActivity k;
     k.renderer.width = size.first;
     k.renderer.height = size.second;
+    for (bool centered : {false, true}) {
+      UITheme::getInstance().metrics.keyboardCenteredText = centered;
+      k.snapshotSelection = 0;
+      k.text.clear();
+      assert(k.snapshotVertical(0, false, -1) == 0);
+      assert(k.snapshotVertical(0, false, 1) == 0);
+      k.text = "abc";
+      assert(k.snapshotVertical(k.text.size(), false, -1) == 3);
+      assert(k.snapshotVertical(k.text.size(), false, 1) == 3);
+      const int columns = (size.first * 90 / 100) / 8;
+      k.text = std::string(columns + 3, 'a');
+      assert(k.snapshotVertical(2, false, -1) == 2);                       // first wrapped line: Up stays put
+      assert(k.snapshotVertical(columns + 2, false, 1) == columns + 2);    // last wrapped line
+      assert(k.snapshotVertical(k.text.size(), false, 1) == columns + 3);  // final caret
+      if (!centered) {
+        assert(k.snapshotVertical(2, false, 1) == columns + 2);
+        assert(k.snapshotVertical(columns + 2, false, -1) == 2);
+      }
+      k.text = "abc\nxyz";
+      assert(k.snapshotVertical(3, false, 1) == 7);  // newline caret belongs to preceding line
+      assert(k.snapshotVertical(4, false, -1) == 0);
+      assert(k.snapshotVertical(7, false, 1) == 7);
+      k.text = "abc\n";
+      assert(k.snapshotVertical(3, false, 1) == 4);  // trailing newline has an empty last line
+      assert(k.snapshotVertical(4, false, 1) == 4);
+      if (!centered) assert(k.snapshotVertical(4, false, -1) == 0);
+      k.text = "ü🙂\nö🙂";
+      assert(k.snapshotVertical(k.text.size(), false, 1) == 13);
+      assert(k.snapshotVertical(k.text.size(), false, -1) == 6);
+      assert(k.snapshotVertical(7, false, -1) == 0);
+      assert(k.snapshotVertical(6, false, 1) == 13);
+      assert(k.snapshotSelection == 0);  // navigation leaves the selection anchor alone
+    }
+    UITheme::getInstance().metrics.keyboardCenteredText = false;
     k.text = "Aü🙂\n\nZ\n";
     auto s = k.text;
     assert(k.lineBreakEnd(s, 0, 400) == 7);

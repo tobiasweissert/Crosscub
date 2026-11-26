@@ -178,19 +178,21 @@ int KeyboardEntryActivity::snapshotVertical(size_t cursor, bool symbolLayer, int
   const int available = pageWidth - (deviceUsesSideButtonHintGutters(gpio) ? 2 * m.sideButtonHintsWidth : 0);
   const int width = pageWidth - 2 * ((pageWidth - available * m.keyboardTextFieldWidthPercent / 100) / 2);
   int start = 0, previous = 0, end;
+  bool endsWithNewline;
   while (true) {
     end = lineBreakEnd(s, start, width);
-    if (cursorPos < static_cast<size_t>(end) || (cursorPos == static_cast<size_t>(end) && s[end] == '\n') ||
+    endsWithNewline = static_cast<size_t>(end) < s.size() && s[end] == '\n';
+    if (cursorPos < static_cast<size_t>(end) || (cursorPos == static_cast<size_t>(end) && endsWithNewline) ||
         end == static_cast<int>(s.size()))
       break;
     previous = start;
-    start = end + (s[end] == '\n' ? 1 : 0);
+    start = end + (endsWithNewline ? 1 : 0);
   }
   const int lineWidth = measureRange(s, start, end);
   int x = measureRange(s, start, static_cast<int>(cursorPos));
   if (rangeIsRtl(s, start, end)) x = lineWidth - x;
   if (m.keyboardCenteredText) x += (width - lineWidth) / 2;
-  int target = direction < 0 ? previous : end + (s[end] == '\n' ? 1 : 0);
+  int target = direction < 0 ? previous : end + (endsWithNewline ? 1 : 0);
   if ((direction < 0 && start == 0) || (direction > 0 && end == static_cast<int>(s.size())))
     return static_cast<int>(cursorPos);
   const int targetEnd = lineBreakEnd(s, target, width);
