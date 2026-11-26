@@ -88,6 +88,14 @@ if original_sdkconfig.is_file():
     )
     if cache_matches(cache_request, cached_request):
         rebuild = False
+        # A fresh checkout has no resolved project file, while a matching warm
+        # package skips Kconfig entirely. Retain that cache's actual resolved
+        # bytes, never defaults, for the unchanged collector/header cross-check.
+        resolved = Path(env.subst("$PROJECT_DIR")) / f"sdkconfig.{env.subst('$PIOENV')}"
+        if not board.get("build.esp-idf.sdkconfig_path", "") and not (resolved.exists() or resolved.is_symlink()):
+            cached_config = target_sdkconfig.read_bytes()
+            with resolved.open("xb") as stream:
+                stream.write(cached_config)
         marker = "# TASMOTA__" + hashlib.md5(
             (requested.strip() + mcu + memory_fingerprint).encode("utf-8")
         ).hexdigest()[:16]

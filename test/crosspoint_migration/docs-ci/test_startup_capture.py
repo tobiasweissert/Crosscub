@@ -49,6 +49,102 @@ class CaptureTests(unittest.TestCase):
         escaped = str(self.header).replace(' ', '\\ ')
         self.write(self.dep, '.pio/build/sticky/src/main.cpp.o: src/main.cpp \\\n ' + escaped + '\n')
 
+    def run_cache_hit_hook(self, explicit_path=''):
+        """Replay the production pre-hook with cached package, fresh checkout."""
+        import runpy
+        from unittest.mock import patch
+        builder = self.platform / 'builder/frameworks/arduino.py'
+        self.write(builder, '''flag_any_custom_sdkconfig = (
+    FRAMEWORK_LIB_DIR is not None
+    and exists(str(Path(FRAMEWORK_LIB_DIR) / chip_variant / "sdkconfig.orig"))
+)''')
+        self.write(builder.with_name('component_manager.py'), '')
+        self.write(self.libs / 'sdkconfig.orig', 'original template, not resolved\n')
+        self.write(self.libs / 'sdkconfig.crosspoint', 'CONFIG_SPIRAM=y\n')
+        owner = self
+
+        class Environment:
+            def PioPlatform(self):
+                return self
+
+            def get_dir(self):
+                return str(owner.platform)
+
+            def get_package_dir(self, name):
+                return str(owner.libs.parent)
+
+            def GetProjectOption(self, name, fallback=''):
+                return 'CONFIG_SPIRAM=y' if name == 'custom_sdkconfig' else fallback
+
+            def BoardConfig(self):
+                return {'build.mcu': 'esp32s3', 'build.esp-idf.sdkconfig_path': explicit_path}
+
+            def subst(self, value):
+                return {'$PROJECT_DIR': str(owner.project), '$PIOENV': 'sticky'}[value]
+
+        with patch.object(sys, 'argv', ['patch_pioarduino_cache.py']):
+            runpy.run_path(str(ROOT / 'scripts/patch_pioarduino_cache.py'),
+                           init_globals={'env': Environment(), 'Import': lambda name: None})
+
+    def test_cache_hit_fresh_checkout_retains_exact_resolved_config(self):
+        self.producer_fixture()
+        resolved = self.project / 'sdkconfig.sticky'
+        resolved.unlink()
+        cached = (self.libs / 'sdkconfig').read_bytes()
+        self.run_cache_hit_hook()
+        self.assertTrue(resolved.is_file(), 'warm package skips Kconfig but fresh checkout needs resolved config')
+        self.assertEqual(resolved.read_bytes(), cached)
+        proc = self.run_capture()
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertTrue(self.receipt()['actual_resolved_config_captured'])
+
+    def test_cache_hit_existing_config_conflict_still_fails(self):
+        self.producer_fixture()
+        resolved = self.project / 'sdkconfig.sticky'
+        conflict = resolved.read_bytes() + b'CONFIG_UNRELATED=y\n'
+        resolved.write_bytes(conflict)
+        self.run_cache_hit_hook()
+        self.assertEqual(resolved.read_bytes(), conflict)
+        self.assert_incomplete()
+        self.assertEqual(self.receipt()['configuration_error'], 'project-package-conflict')
+
+    def test_cache_hit_explicit_config_path_is_not_materialized(self):
+        self.complete_fixture()
+        resolved = self.project / 'sdkconfig.sticky'
+        resolved.unlink()
+        self.run_cache_hit_hook(explicit_path='user-owned.sdkconfig')
+        self.assertFalse(resolved.exists())
+        self.assert_incomplete()
+        self.assertEqual(self.receipt()['configuration_error'], 'required-config-missing')
+
+    def test_cache_hit_preserves_dangling_project_symlink(self):
+        self.complete_fixture()
+        resolved = self.project / 'sdkconfig.sticky'
+        resolved.unlink()
+        foreign = self.base / 'must-not-create'
+        resolved.symlink_to(foreign)
+        self.run_cache_hit_hook()
+        self.assertTrue(resolved.is_symlink())
+        self.assertFalse(foreign.exists())
+
+    def test_cache_hit_missing_package_config_does_not_create_empty_project(self):
+        self.complete_fixture()
+        resolved = self.project / 'sdkconfig.sticky'
+        resolved.unlink()
+        (self.libs / 'sdkconfig').unlink()
+        with self.assertRaises(FileNotFoundError):
+            self.run_cache_hit_hook()
+        self.assertFalse(resolved.exists())
+
+    def test_cache_hit_does_not_waive_actual_header_config_check(self):
+        self.producer_fixture()
+        (self.project / 'sdkconfig.sticky').unlink()
+        package = self.libs / 'sdkconfig'
+        package.write_text(package.read_text().replace('CONFIG_SPIRAM_SPEED=80', 'CONFIG_SPIRAM_SPEED=40'))
+        self.run_cache_hit_hook()
+        self.assert_incomplete()
+        self.assertEqual(self.receipt()['configuration_error'], 'header-config-conflict')
+
     def run_capture(self, mode=None):
         before = digest_tree(self.project), digest_tree(self.home)
         env = dict(os.environ, HOME=str(self.home), PYTHONDONTWRITEBYTECODE='1')
