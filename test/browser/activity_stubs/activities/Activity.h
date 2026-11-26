@@ -23,6 +23,9 @@ class Activity {
   virtual ~Activity() = default;
   virtual void onEnter() {}
   virtual void onExit() {}
+  virtual void prepareForSleep() {}
+  virtual void onInputLockChanged(bool) {}
+  virtual void onFrontlightPanelOpened() {}
   virtual void loop() {}
   virtual void render(RenderLock&&) {}
   virtual bool handleHomeGesture() { return false; }

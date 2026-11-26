@@ -131,4 +131,9 @@ bool mintPasswordToken(freeink::SecureHttpClient* session, const std::string& ur
                        const std::string& body, const Headers& headers, const std::string& tokenPath,
                        std::string& outToken, const std::function<bool()>& shouldAbort = nullptr);
 
+// Private Notes only: fixed OpenAI WSS transcription origin, no redirects/retries.
+// outgoing returns false to finish, or supplies one JSON message (empty = idle).
+bool notesRealtime(const std::string& key, const std::function<bool(std::string&)>& outgoing,
+                   const std::function<bool(const std::string&)>& incoming, const std::function<bool()>& cancel);
+
 }  // namespace pluginhttp

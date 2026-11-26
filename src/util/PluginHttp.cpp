@@ -10,6 +10,8 @@
 #include <esp_tls.h>
 #include <lwip/netdb.h>
 #include <mbedtls/ssl.h>
+#include <mbedtls/sha1.h>
+#include <esp_random.h>
 #include <mbedtls/x509_crt.h>
 #endif
 #include <algorithm>
@@ -193,12 +195,13 @@ struct Connection {
   esp_tls_t* tls = nullptr;
   uint32_t start;
   const std::function<bool()>& cancel;
-  Connection(uint32_t s, const std::function<bool()>& c) : start(s), cancel(c) {}
+  uint32_t budget;
+  Connection(uint32_t s, const std::function<bool()>& c, uint32_t b = ELAPSED_MS) : start(s), cancel(c), budget(b) {}
   ~Connection() {
     if (tls) esp_tls_conn_destroy(tls);
   }
   bool stopped() const {
-    return !networkAllowed.load() || uint32_t(millis() - start) >= ELAPSED_MS || (cancel && cancel());
+    return !networkAllowed.load() || uint32_t(millis() - start) >= budget || (cancel && cancel());
   }
   bool open(const Url& u) {
     if (stopped()) return reject(Failure::Stopped);
@@ -810,3 +813,6 @@ bool mintPasswordToken(freeink::SecureHttpClient* session, const std::string& ur
 }
 
 }  // namespace pluginhttp
+
+#include "network/NotesRealtimeWire.h"
+#include "NotesRealtimeTransport.inc"

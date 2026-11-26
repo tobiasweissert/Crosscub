@@ -26,6 +26,7 @@
 #include "Logging.h"
 #include "LuaKeyboardPaint.h"
 #include "LuaRuntime.h"
+#include "LuaNotesDictation.h"
 #include "MappedInputManager.h"
 #include "Memory.h"
 #include "components/TouchRegistry.h"
@@ -277,6 +278,7 @@ void LuaRunner::shutdown() {
     launchBinding_.launch->failAttempt(launchBinding_.attempt, airdrop::browser::LaunchError::ExitedBeforeAck);
   }
   requestNativeCancel();
+  dictation_.close();
   images_.close();
   browserFile_.close();
   browserFilePath_.clear();
@@ -297,6 +299,7 @@ void LuaRunner::shutdown() {
 }
 
 void LuaRunner::setError(const char* msg) {
+  dictation_.cancel();
   if (launchBinding_.launch) {
     launchBinding_.launch->failAttempt(launchBinding_.attempt, airdrop::browser::LaunchError::ScriptFailed);
   }
@@ -528,6 +531,7 @@ void LuaRunner::onSwipe(const char* dir) {
 }
 
 void LuaRunner::onExit() {
+  dictation_.cancel();
   onTouchRelease();
   if (!L || hasError_) return;
   s_activeRunner = this;
@@ -575,6 +579,7 @@ void LuaRunner::registerSmudgeApi() {
   lua_setfield(L, -2, "browser_image");
 
   keyboard::registerPaint(L, renderer_);
+  if (appId_ == "cp-notes") registerNotesDictation(L, dictation_);
   lua_pushcfunction(L, l_clear);
   lua_setfield(L, -2, "clear");
 

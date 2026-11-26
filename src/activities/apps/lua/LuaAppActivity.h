@@ -95,9 +95,13 @@ class LuaAppActivityAdapter : public Activity {
   }
 
   bool handleHomeGesture() override {
-    if (runner_ && runner_->cooperativeBrowser()) runner_->requestNativeCancel();
+    if (runner_) runner_->requestNativeCancel();
     return false;  // ActivityManager's existing global Home path owns navigation.
   }
+
+  void prepareForSleep() override { if (runner_) runner_->requestNativeCancel(); }
+  void onInputLockChanged(bool locked) override { if (locked && runner_) runner_->requestNativeCancel(); }
+  void onFrontlightPanelOpened() override { if (runner_) runner_->requestNativeCancel(); }
 
   bool preventAutoSleep() override { return runner_ && runner_->preventAutoSleep(); }
 

@@ -173,7 +173,8 @@ class HostRunner {
   bool hasActiveTouchHold() { return false; }
   void onTouchRelease() { assert(false && "Browser has no active long-press"); }
   bool networkEnabled() { return false; }
-  bool cooperativeBrowser() { return true; }
+  bool cooperative = true;
+  bool cooperativeBrowser() { return cooperative; }
   bool preventAutoSleep() { return false; }
   bool shouldExit() { return exit; }
   bool hasError() { return error; }
@@ -261,6 +262,20 @@ int main() {
   Adapter activity(renderer, input, "apps/browser", "Browser");
   activity.onEnter();
   ticks(activity, input);
+  // Ordinary Notes runners also revoke out of band, without waiting for Lua.
+  HostRunner::live->cooperative = false;
+  activity.onInputLockChanged(true);
+  assert(HostRunner::live->nativeCancel.load());
+  HostRunner::live->clearNativeCancel();
+  activity.prepareForSleep();
+  assert(HostRunner::live->nativeCancel.load());
+  HostRunner::live->clearNativeCancel();
+  activity.onFrontlightPanelOpened();
+  assert(HostRunner::live->nativeCancel.load());
+  HostRunner::live->clearNativeCancel();
+  assert(!activity.handleHomeGesture() && HostRunner::live->nativeCancel.load());
+  HostRunner::live->clearNativeCancel();
+  HostRunner::live->cooperative = true;
   navigate(activity, input);
   complete("<article><h1>OLD READABLE PAGE</h1><p>Retained contents</p></article>");
   ticks(activity, input, 100);

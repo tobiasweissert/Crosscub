@@ -3,6 +3,7 @@
 #include <BrowserImage.h>
 #include <HalStorage.h>
 #include <LuaHttp.h>
+#include "network/NotesDictation.h"
 
 #include <atomic>
 #include <cstdint>
@@ -59,6 +60,7 @@ class LuaRunner {
   bool cooperativeBrowser() const { return browser_ && http_.cooperative; }
   void requestNativeCancel() {
     renderCancel_.store(true, std::memory_order_relaxed);
+    dictation_.cancel();
     if (cooperativeBrowser()) {
       http_.requestCancel();
       images_.requestCancel();
@@ -78,6 +80,7 @@ class LuaRunner {
   std::string appId_;
   std::string saveDir_;
 
+  NotesDictation dictation_;
   http::Session http_{http::platformExecutor()};
   bool resolvePath(const char* path, std::string& result) const;
   lua_State* L = nullptr;
