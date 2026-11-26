@@ -15,6 +15,32 @@ import configparser
 import os
 import stat
 
+# Only fixed collector-authored codes may cross the public log boundary.
+# Never print exception text, configuration values, command lines or raw receipts.
+PUBLIC_CONFIGURATION_ERRORS = frozenset({
+    'producer-phase-incomplete', 'producer-command-conflict',
+    'producer-projection-type', 'producer-projection-incomplete', 'producer-projection-conflict',
+    'duplicate-config', 'duplicate-header', 'unsupported-header-grammar',
+    'unsupported-header-comment-or-string', 'unsupported-header-guard',
+    'header-alias-cycle-or-undefined', 'header-nonliteral', 'header-alias-depth-limit',
+    'dependency-escape', 'dependency-variable', 'dependency-rule',
+    'dependency-duplicate-target', 'dependency-foreign-target', 'dependency-target-missing',
+    'dependency-path-traversal', 'foreign-sdk-header', 'dependency-header-missing',
+    'dependency-header-ambiguous', 'producer-proof-type', 'producer-proof-incomplete',
+    'producer-receipt-missing', 'dependency-header-unresolved', 'producer-header-type',
+    'producer-header-conflict', 'required-config-missing', 'project-package-conflict',
+    'producer-active-macro-conflict', 'ignore-notfound-enabled', 'selected-value-invalid',
+    'header-config-conflict', 'selected-values-unresolved', 'actual-header-candidate-disagreement',
+})
+
+
+def public_configuration_error(exc):
+    if (type(exc) is ValueError and len(exc.args) == 1 and
+            type(exc.args[0]) is str and exc.args[0] in PUBLIC_CONFIGURATION_ERRORS):
+        return exc.args[0]
+    return 'configuration-incomplete'
+
+
 MAX_FILE = 262144
 MAX_TOTAL = 2097152
 KEYS = (
@@ -508,10 +534,8 @@ def capture(project, environment, memory_type, out, *, require_producer=True):
                 raise ValueError('actual-header-candidate-disagreement')
             report['actual_resolved_config_captured'] = not report['diagnostics']
         except (ValueError, TypeError, KeyError, configparser.Error) as exc:
-            # Preserve the observed missing-closure failure without disclosing
-            # arbitrary exception text or treating a board candidate as proof.
-            if isinstance(exc, ValueError) and exc.args == ('dependency-header-missing',):
-                report['configuration_error'] = 'dependency-header-missing'
+            # Preserve only a closed collector-authored reason, never exception text.
+            report['configuration_error'] = public_configuration_error(exc)
             report['diagnostics'].append('configuration-incomplete')
         report['captured_bytes'] = total
         # Count-bound derived detail before serialization; a small receipt must
@@ -555,9 +579,13 @@ def main():
     except (OSError, ValueError):
         print(json.dumps({'actual_resolved_config_captured': False, 'capture_error': True}))
         return 1
-    print(json.dumps({'actual_resolved_config_captured': report['actual_resolved_config_captured'],
-                      'captured_bytes': report['captured_bytes'],
-                      'captured_files': sum(f['present'] for f in report['files'].values())}))
+    status = {'actual_resolved_config_captured': report['actual_resolved_config_captured'],
+              'captured_bytes': report['captured_bytes'],
+              'captured_files': sum(f['present'] for f in report['files'].values())}
+    if not report['actual_resolved_config_captured']:
+        status['configuration_error'] = public_configuration_error(
+            ValueError(report.get('configuration_error')))
+    print(json.dumps(status))
     return 0 if report['actual_resolved_config_captured'] else 1
 
 

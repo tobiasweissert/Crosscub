@@ -43,14 +43,17 @@ class ExactTests(unittest.TestCase):
             args = helper.suppressions(root)
             self.assertEqual(len(args), len(entries['exceptions']))
             self.assertTrue(all(arg.startswith('--suppress=') and '*' not in arg for arg in args))
-            entry = entries['exceptions'][0]
-            for changes in ({'sha256': '0'*64}, {'line': entry['line']+1}, {'id': '*'}, {'path': '../escape'}):
+            for entry in entries['exceptions']:
+                for changes in ({'sha256': '0'*64}, {'line': entry['line']+1}, {'id': '*'}, {'path': '../escape'}):
+                    with self.subTest(path=entry['path'], line=entry['line'], changes=changes):
+                        with self.assertRaises(RuntimeError):
+                            helper.validate_entry(root, dict(entry, **changes))
+                source = root/entry['path']
+                original = source.read_bytes()
+                source.write_bytes(original+b'\n')
                 with self.assertRaises(RuntimeError):
-                    helper.validate_entry(root, dict(entry, **changes))
-            source = root/entry['path']
-            source.write_bytes(source.read_bytes()+b'\n')
-            with self.assertRaises(RuntimeError):
-                helper.suppressions(root)
+                    helper.suppressions(root)
+                source.write_bytes(original)
             (root/'freeink-sdk/.git').unlink()
             subprocess.run(['git', 'init', '-q', str(root/'freeink-sdk')], check=True)
             with self.assertRaises(RuntimeError):
@@ -124,7 +127,7 @@ class CombinedHookTests(unittest.TestCase):
         original = self.snapshot()
         self.run_hook()
         installed = self.snapshot()
-        self.assertEqual(len(installed), 7)
+        self.assertEqual(len(installed), len(load().PATCHES) + len(self.run_hook()['SDK_SECURENET_PREIMAGES']))
         self.assertTrue(all(installed[path] != original[path] for path in self.paths))
         self.run_hook()
         self.assertEqual(installed, self.snapshot())

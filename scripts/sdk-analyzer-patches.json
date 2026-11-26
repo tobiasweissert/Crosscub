@@ -1,4 +1,11 @@
 {
+  "libs/network/SecureNet/include/ResumableFetch.h": {
+    "sha256": "5f2619d0df5316ae83362612a07b54890e3e1d7f83520b0354923de6493af1c1",
+    "edits": [
+      ["#include <cctype>", "#include <algorithm>\n#include <cctype>"],
+      ["    for (char& c : *part) c = static_cast<char>(tolower(static_cast<unsigned char>(c)));", "    std::transform(part->begin(), part->end(), part->begin(),\n                   [](unsigned char c) { return static_cast<char>(tolower(c)); });"]
+    ]
+  },
   "libs/ui/FreeInkUI/include/components/bars/battery-indicator.h": {
     "sha256": "af6244ed19ec20d9d5cb0fb30ad3dd33200a6fd6c04cefed5a6462404033e8a7",
     "edits": [

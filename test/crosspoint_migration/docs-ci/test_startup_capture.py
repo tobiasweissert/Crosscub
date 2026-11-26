@@ -93,6 +93,25 @@ class CaptureTests(unittest.TestCase):
                                            config_records=data.count(b'\n'), records=data.count(b'\n'))
         (self.out/'producer-main-receipt.json').write_text(json.dumps(receipt))
 
+    def test_public_failure_identifies_missing_producer_without_raw_config(self):
+        self.complete_fixture()
+        proc = self.run_capture('--require-producer')
+        self.assertEqual(proc.returncode, 1)
+        status = json.loads(proc.stdout)
+        self.assertEqual(status.get('configuration_error'), 'producer-receipt-missing')
+        self.assertEqual(self.receipt()['configuration_error'], status['configuration_error'])
+        self.assertNotIn('CONFIG_', proc.stdout + proc.stderr)
+        self.assertFalse(status['actual_resolved_config_captured'])
+
+    def test_public_configuration_error_rejects_arbitrary_exception_text(self):
+        module = load()
+        for exc in (ValueError('secret-canary bearer https://private/config'),
+                    KeyError('secret-canary'), TypeError('secret-canary'),
+                    ValueError('producer-receipt-missing', 'secret-canary')):
+            self.assertEqual(module.public_configuration_error(exc), 'configuration-incomplete')
+        self.assertEqual(module.public_configuration_error(ValueError('header-config-conflict')),
+                         'header-config-conflict')
+
     def test_missing_producer_cannot_certify_hosted_capture(self):
         self.complete_fixture()
         self.assertEqual(self.run_capture('--require-producer').returncode, 1)
@@ -275,7 +294,8 @@ class CaptureTests(unittest.TestCase):
                 self.assertEqual(proc.stderr, '', 'public traceback/diagnostic disclosure')
                 self.assertLess(len(proc.stdout), 256)
                 status = json.loads(proc.stdout)
-                self.assertEqual(set(status), {'actual_resolved_config_captured', 'captured_bytes', 'captured_files'})
+                self.assertEqual(set(status), {'actual_resolved_config_captured', 'captured_bytes', 'captured_files', 'configuration_error'})
+                self.assertEqual(status['configuration_error'], 'configuration-incomplete')
                 self.assertFalse(self.receipt()['actual_resolved_config_captured'])
                 self.assertTrue(self.receipt()['diagnostics'])
                 self.assertIn('inheritance-cycle' if cyclic == 'short-cycle' else 'inheritance-depth-limit',

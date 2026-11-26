@@ -85,6 +85,8 @@ class NativeExceptionTests(unittest.TestCase):
         sdk_root = Path(scratch.name)
         self.sdk = sdk_root/'libs/ui/FreeInkUI'
         shutil.copytree(SDK, self.sdk)
+        shutil.copytree(ROOT/'freeink-sdk/libs/network/SecureNet',
+                        sdk_root/'libs/network/SecureNet')
         helper.apply_patches(sdk_root, verify_revision=False)
 
     def compile(self, directory, source, include=None):
@@ -244,6 +246,98 @@ int main() {
             result = self.compile(directory, source)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(subprocess.run([str(directory/'probe')], timeout=10).returncode, 0)
+
+    def test_seven_published_instance_declarations_reject_static_mutations(self):
+        import re
+        contracts = (
+            ('src/activities/Activity.h', 'Activity', 'onGoHome', 'HomeMenuItem'),
+            ('src/activities/Activity.h', 'Activity', 'onSelectBook', 'const std::string&'),
+            ('src/activities/Activity.h', 'Activity', 'finish', ''),
+            ('src/activities/ActivityManager.h', 'ActivityManager', 'goToCalibreWireless', 'const std::string&'),
+            ('src/activities/ActivityManager.h', 'ActivityManager', 'goToJoinNetworkFileTransfer', 'const std::string&'),
+            ('src/activities/ActivityManager.h', 'ActivityManager', 'goToHotspotFileTransfer', 'const std::string&'),
+            ('src/components/themes/BaseTheme.h', 'BaseTheme', 'drawProgressBar', 'const GfxRenderer&, Rect, size_t, size_t'),
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            for path, owner, member, arguments in contracts:
+                with self.subTest(member=member):
+                    # Compile the exact real declaration, including defaults and const;
+                    # omit unrelated embedded-only declarations, not this API's tokens.
+                    text = (ROOT/path).read_text()
+                    declarations = re.findall(r'^  void '+member+r'\([^;]+;', text, re.MULTILINE)
+                    self.assertEqual(len(declarations), 1)
+                    declaration = declarations[0]
+                    qualifier = ' const' if member == 'drawProgressBar' else ''
+                    source = ('#include <string>\n#include <cstddef>\n#include <type_traits>\n'
+                              'enum class HomeMenuItem { NONE }; class GfxRenderer; struct Rect;\n'
+                              'class '+owner+' { public:\n'+declaration+'\n};\n'
+                              'static_assert(std::is_same_v<decltype(&'+owner+'::'+member+'), '
+                              'void ('+owner+'::*)('+arguments+')'+qualifier+'>);\nint main() {}\n')
+                    positive = self.compile(directory, source)
+                    self.assertEqual(positive.returncode, 0, positive.stderr)
+                    mutant = declaration.replace('void ', 'static void ', 1).replace(') const;', ');')
+                    negative = self.compile(directory, source.replace(declaration, mutant))
+                    self.assertNotEqual(negative.returncode, 0, member)
+                    self.assertIn('static assertion failed', negative.stderr)
+
+    def test_fetch_origin_transform_matches_original_for_all_bytes(self):
+        import json
+        patches = json.loads((ROOT/'scripts/sdk-analyzer-patches.json').read_text())
+        # Obtain authenticated original even if the build already installed overlays.
+        old = subprocess.check_output(['git', '-C', str(ROOT/'freeink-sdk'), 'show',
+                                      'HEAD:libs/network/SecureNet/include/ResumableFetch.h'], text=True)
+        new = old
+        for before, after in patches['libs/network/SecureNet/include/ResumableFetch.h']['edits']:
+            self.assertEqual(new.count(before), 1)
+            new = new.replace(before, after)
+        unchanged = '// A resumable response'
+        self.assertEqual(old[old.index(unchanged):], new[new.index(unchanged):])
+        def origin(text):
+            return text[text.index('inline std::string fetchOrigin('):text.index('// A resumable response')]
+        source = ('#include <algorithm>\n#include <cctype>\n#include <string>\n#include <cassert>\n#include <clocale>\n'
+                  +origin(old).replace('fetchOrigin(', 'original(')+origin(new)+r'''
+int main() {
+  std::setlocale(LC_ALL, "C");
+  for (const std::string url : {"", "HTTPS://User@EXAMPLE.COM/a", "http://[ABCD::1]/", "http://HOST:99/", "http:///"})
+    assert(original(url) == fetchOrigin(url));
+  for (unsigned int byte = 0; byte < 256; ++byte) {
+    std::string url = "HTTPS://User@EXAMPLE";
+    url.push_back(static_cast<char>(byte));
+    url += ".ORG:443/path?Q=Value";
+    assert(original(url) == fetchOrigin(url));
+  }
+  assert(fetchOrigin("HTTPS://User@EXAMPLE.COM/a") == "https://example.com:443");
+}
+''')
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            result = self.compile(directory, source)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(subprocess.run([str(directory/'probe')], timeout=10).returncode, 0)
+
+    def test_real_resumable_fetch_host_suite_with_installed_overlay(self):
+        import os
+        import runpy
+        from unittest.mock import patch as environment_patch
+        with tempfile.TemporaryDirectory() as empty:
+            env = type('Env', (), {'subst': lambda self, value: empty})()
+            with environment_patch.dict(os.environ, {'CROSSCUB_PRIVATE_EVIDENCE': ''}):
+                overlay = runpy.run_path(str(ROOT/'scripts/patch_wolfssl.py'),
+                                        init_globals={'Import': lambda value: None, 'env': env})
+            sdk_root = self.sdk.parents[2]
+            for relative, data in overlay['sdk_secure_net_outputs'](ROOT/'freeink-sdk').items():
+                (sdk_root/relative).write_bytes(data)
+            net = sdk_root/'libs/network/SecureNet'
+            with tempfile.TemporaryDirectory() as tmp:
+                executable = Path(tmp)/'fetch'
+                result = subprocess.run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror',
+                                         '-I'+str(net/'test/host/stubs'), '-I'+str(net/'include'),
+                                         str(net/'test/host/test_resumable_fetch.cpp'), '-o', str(executable)],
+                                        capture_output=True, text=True, timeout=90)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                result = subprocess.run([str(executable)], capture_output=True, text=True, timeout=20)
+                self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
 
     def test_sdk_full_host_suite_after_local_repairs(self):
         with tempfile.TemporaryDirectory() as tmp:

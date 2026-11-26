@@ -171,6 +171,69 @@
       "source": "  bool isXteinkDevice() const { return false; }  // Crosscub admits Sticky only.",
       "reason": "Pinned const-instance capability query contract; static replacement changes member-function type. Compiled exact-declaration member-pointer positive and static-mutation negative.",
       "test": "test/crosspoint_migration/docs-ci/test_cppcheck_native_exceptions.py"
+    },
+    {
+      "path": "src/activities/Activity.cpp",
+      "id": "functionStatic",
+      "line": 13,
+      "sha256": "f20f05c9e24ee9cbb31738715f20281611e6a0dd7db80989f65d5c13ac4758c2",
+      "source": "void Activity::onGoHome(HomeMenuItem item) { activityManager.goHome(item); }",
+      "reason": "Owner-authorized intentional instance API: preserve the published non-static callable signature. Exact source declaration/member-pointer positive and one static-declaration mutation negative per method compile on the host; this is API compatibility, not a claim that the body needs instance state.",
+      "test": "test/crosspoint_migration/docs-ci/test_cppcheck_native_exceptions.py"
+    },
+    {
+      "path": "src/activities/Activity.cpp",
+      "id": "functionStatic",
+      "line": 15,
+      "sha256": "f20f05c9e24ee9cbb31738715f20281611e6a0dd7db80989f65d5c13ac4758c2",
+      "source": "void Activity::onSelectBook(const std::string& path) { activityManager.goToReader(path); }",
+      "reason": "Owner-authorized intentional instance API: preserve the published non-static callable signature. Exact source declaration/member-pointer positive and one static-declaration mutation negative per method compile on the host; this is API compatibility, not a claim that the body needs instance state.",
+      "test": "test/crosspoint_migration/docs-ci/test_cppcheck_native_exceptions.py"
+    },
+    {
+      "path": "src/activities/Activity.cpp",
+      "id": "functionStatic",
+      "line": 29,
+      "sha256": "f20f05c9e24ee9cbb31738715f20281611e6a0dd7db80989f65d5c13ac4758c2",
+      "source": "void Activity::finish() { activityManager.popActivity(); }",
+      "reason": "Owner-authorized intentional instance API: preserve the published non-static callable signature. Exact source declaration/member-pointer positive and one static-declaration mutation negative per method compile on the host; this is API compatibility, not a claim that the body needs instance state.",
+      "test": "test/crosspoint_migration/docs-ci/test_cppcheck_native_exceptions.py"
+    },
+    {
+      "path": "src/activities/ActivityManager.cpp",
+      "id": "functionStatic",
+      "line": 690,
+      "sha256": "dba91faf5b4098ff4745f82dcbfde290c7e0910f66465363be7bb81e557eaaeb",
+      "source": "void ActivityManager::goToCalibreWireless(const std::string& returnBookPath) {",
+      "reason": "Owner-authorized intentional instance API: preserve the published non-static callable signature. Exact source declaration/member-pointer positive and one static-declaration mutation negative per method compile on the host; this is API compatibility, not a claim that the body needs instance state.",
+      "test": "test/crosspoint_migration/docs-ci/test_cppcheck_native_exceptions.py"
+    },
+    {
+      "path": "src/activities/ActivityManager.cpp",
+      "id": "functionStatic",
+      "line": 694,
+      "sha256": "dba91faf5b4098ff4745f82dcbfde290c7e0910f66465363be7bb81e557eaaeb",
+      "source": "void ActivityManager::goToJoinNetworkFileTransfer(const std::string& returnBookPath) {",
+      "reason": "Owner-authorized intentional instance API: preserve the published non-static callable signature. Exact source declaration/member-pointer positive and one static-declaration mutation negative per method compile on the host; this is API compatibility, not a claim that the body needs instance state.",
+      "test": "test/crosspoint_migration/docs-ci/test_cppcheck_native_exceptions.py"
+    },
+    {
+      "path": "src/activities/ActivityManager.cpp",
+      "id": "functionStatic",
+      "line": 698,
+      "sha256": "dba91faf5b4098ff4745f82dcbfde290c7e0910f66465363be7bb81e557eaaeb",
+      "source": "void ActivityManager::goToHotspotFileTransfer(const std::string& returnBookPath) {",
+      "reason": "Owner-authorized intentional instance API: preserve the published non-static callable signature. Exact source declaration/member-pointer positive and one static-declaration mutation negative per method compile on the host; this is API compatibility, not a claim that the body needs instance state.",
+      "test": "test/crosspoint_migration/docs-ci/test_cppcheck_native_exceptions.py"
+    },
+    {
+      "path": "src/components/themes/BaseTheme.cpp",
+      "id": "functionStatic",
+      "line": 146,
+      "sha256": "c8493d0ed3daa96e3ec45f195a86d620edb871208ba56e2a16d179ba19971f37",
+      "source": "void BaseTheme::drawProgressBar(const GfxRenderer& renderer, Rect rect, const size_t current,",
+      "reason": "Owner-authorized intentional instance API: preserve the published non-static callable signature. Exact source declaration/member-pointer positive and one static-declaration mutation negative per method compile on the host; this is API compatibility, not a claim that the body needs instance state.",
+      "test": "test/crosspoint_migration/docs-ci/test_cppcheck_native_exceptions.py"
     }
   ]
 }
